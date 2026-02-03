@@ -5,27 +5,22 @@ import plotly.graph_objects as go
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing
 from datetime import timedelta
 
-# Set page configuration
 st.set_page_config(page_title="Order Forecasting Dashboard", layout="wide")
 
 st.title("📦 Order Forecasting Dashboard")
-st.markdown("""
-Upload your data file containing columns: **Date, PARTNO, PART DESCRIPTION, qty_veh_1, UOM, AGGREGATE, SUPPLY CONDITION, order_qty**.
-""")
 
 # --- 1. File Upload ---
 uploaded_file = st.file_uploader("Upload CSV or Excel file", type=['csv', 'xlsx'])
 
 def get_forecast(df, method, horizon, params):
-    """Core forecasting logic applied per Part Number."""
     last_date = df['Date'].max()
-    future_dates = [last_date + timedelta(days=30 * i) for i in range(1, horizon + 1)]
-    history = df['order_qty'].values
+    # Create monthly future dates
+    future_dates = [last_date + pd.DateOffset(months=i) for i in range(1, horizon + 1)]
+    history = df['order_qty'].values.astype(float)
     
     forecast_values = []
     
     if method == "Historical Manager":
-        # Naive approach: Uses the last known value
         val = history[-1] if len(history) > 0 else 0
         forecast_values = [val] * horizon
         
@@ -44,15 +39,17 @@ def get_forecast(df, method, horizon, params):
         forecast_values = [val] * horizon
         
     elif method == "Ramp up Average":
-        # Start from average and increase by a ramp percentage
         base_avg = np.mean(history)
-        ramp_rate = params.get('ramp_rate', 0.05) # 5% increase per period
+        ramp_rate = params.get('ramp_rate', 0.05)
         forecast_values = [base_avg * (1 + ramp_rate * i) for i in range(1, horizon + 1)]
         
     elif method == "Exponentially":
         alpha = params.get('alpha', 0.3)
-        model = SimpleExpSmoothing(history).fit(smoothing_level=alpha, optimized=False)
-        forecast_values = model.forecast(horizon)
+        try:
+            model = SimpleExpSmoothing(history, initialization_method="estimated").fit(smoothing_level=alpha, optimized=False)
+            forecast_values = model.forecast(horizon)
+        except:
+            forecast_values = [history[-1]] * horizon
 
     return pd.DataFrame({
         'Date': future_dates,
@@ -61,73 +58,76 @@ def get_forecast(df, method, horizon, params):
     })
 
 if uploaded_file:
-    # Load data
+    # Read data
     if uploaded_file.name.endswith('.csv'):
         data = pd.read_csv(uploaded_file)
     else:
         data = pd.read_excel(uploaded_file)
     
-    # Pre-processing
-    data['Date'] = pd.to_datetime(data['Date'])
-    required_cols = ['Date', 'PARTNO', 'PART DESCRIPTION', 'qty_veh_1', 'UOM', 'AGGREGATE', 'SUPPLY CONDITION', 'order_qty']
+    # --- Robust Column Cleaning ---
+    # 1. Remove hidden spaces from column names
+    data.columns = data.columns.str.strip()
     
-    if not all(col in data.columns for col in required_cols):
-        st.error(f"Missing columns! Ensure file has: {', '.join(required_cols)}")
+    # 2. Define required columns
+    required = ['Date', 'PARTNO', 'PART DESCRIPTION', 'qty_veh_1', 'UOM', 'AGGREGATE', 'SUPPLY CONDITION', 'order_qty']
+    
+    # 3. Case-insensitive check: Try to map user columns to required columns
+    column_mapping = {}
+    for req in required:
+        for actual in data.columns:
+            if req.lower() == actual.lower():
+                column_mapping[actual] = req
+    
+    # Rename columns to standard names
+    data = data.rename(columns=column_mapping)
+    
+    # Check if all required columns now exist
+    missing = [col for col in required if col not in data.columns]
+    
+    if missing:
+        st.error(f"❌ Missing columns: {', '.join(missing)}")
+        st.info(f"The columns found in your file are: {list(data.columns)}")
     else:
-        st.success("Data Uploaded Successfully!")
+        # Success - Pre-process data
+        data['Date'] = pd.to_datetime(data['Date'])
+        data['order_qty'] = pd.to_numeric(data['order_qty'], errors='coerce').fillna(0)
         
-        # --- 2. Sidebar Controls ---
+        # --- Sidebar ---
         st.sidebar.header("Forecast Settings")
         selected_part = st.sidebar.selectbox("Select Part Number", data['PARTNO'].unique())
         method = st.sidebar.selectbox("Forecasting Method", 
                                     ["Historical Manager", "Weightage Average", "Moving Average", "Ramp up Average", "Exponentially"])
         horizon = st.sidebar.slider("Forecast Horizon (Months)", 1, 12, 6)
         
-        # Dynamic parameters based on method
         params = {}
         if method in ["Moving Average", "Weightage Average"]:
-            params['window'] = st.sidebar.number_input("Window Size", min_value=1, max_value=12, value=3)
+            params['window'] = st.sidebar.number_input("Window Size (Months)", min_value=1, max_value=12, value=3)
         elif method == "Ramp up Average":
             params['ramp_rate'] = st.sidebar.slider("Ramp Growth Rate (%)", 0, 50, 5) / 100
         elif method == "Exponentially":
             params['alpha'] = st.sidebar.slider("Smoothing Factor (Alpha)", 0.01, 1.0, 0.3)
 
-        # Filter data for selected part
+        # Filter and Forecast
         part_data = data[data['PARTNO'] == selected_part].sort_values('Date')
         part_info = part_data.iloc[0].drop(['Date', 'order_qty']).to_dict()
         
-        # Generate Forecast
         forecast_df = get_forecast(part_data, method, horizon, params)
         
-        # Merge metadata back into forecast
+        # Apply metadata to forecast
         for col in ['PARTNO', 'PART DESCRIPTION', 'qty_veh_1', 'UOM', 'AGGREGATE', 'SUPPLY CONDITION']:
             forecast_df[col] = part_info[col]
         
-        # --- 3. Visualization ---
+        # --- Visualization ---
         fig = go.Figure()
+        fig.add_trace(go.Scatter(x=part_data['Date'], y=part_data['order_qty'], name='Historical', mode='lines+markers'))
+        fig.add_trace(go.Scatter(x=forecast_df['Date'], y=forecast_df['order_qty'], name='Forecast', line=dict(dash='dash', color='red')))
         
-        # Historical Data
-        fig.add_trace(go.Scatter(x=part_data['Date'], y=part_data['order_qty'], 
-                                 name='Past Actuals', mode='lines+markers', line=dict(color='blue')))
-        
-        # Forecast Data
-        fig.add_trace(go.Scatter(x=forecast_df['Date'], y=forecast_df['order_qty'], 
-                                 name=f'Future Forecast ({method})', mode='lines+markers', line=dict(dash='dash', color='red')))
-        
-        fig.update_layout(title=f"Trend Comparison for Part: {selected_part}",
-                          xaxis_title="Date", yaxis_title="Order Quantity",
-                          hovermode="x unified")
+        fig.update_layout(title=f"Forecast for {selected_part} ({method})", xaxis_title="Date", yaxis_title="Qty")
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- 4. Data Display & Download ---
-        st.subheader("Forecasted Data")
-        st.write(forecast_df)
+        # --- Download ---
+        st.subheader("Forecast Results")
+        st.dataframe(forecast_df)
         
-        # Download Button
         csv = forecast_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Forecasted Data as CSV",
-            data=csv,
-            file_name=f"forecast_{selected_part}_{method}.csv",
-            mime='text/csv',
-        )
+        st.download_button("Download Forecast CSV", csv, f"forecast_{selected_part}.csv", "text/csv")
