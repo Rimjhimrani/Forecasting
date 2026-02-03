@@ -3,182 +3,147 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing
-from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
+from datetime import timedelta
 
 st.set_page_config(page_title="Order Forecasting System", layout="wide")
 
-# --- CSS for better UI ---
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    </style>
-    """, unsafe_allow_html=True)
+# --- UI Header ---
+st.title("📊 Order Forecasting System")
+st.markdown("---")
 
-st.title("📦 Advanced Order Forecasting Dashboard")
+# --- STEP 1: Choose an Option (Flowchart Step 3) ---
+col1, col2 = st.columns(2)
+with col1:
+    analysis_type = st.radio("Choose Analysis Type", ["Aggregate Wise", "Product Wise"], horizontal=True)
 
-# --- 1. File Upload & Processing ---
-uploaded_file = st.file_uploader("Upload Data (CSV or Excel)", type=['csv', 'xlsx'])
-
-def clean_data(df):
-    """Standardize column names and types"""
-    df.columns = df.columns.str.strip()
-    required = ['Date', 'PARTNO', 'PART DESCRIPTION', 'qty_veh_1', 'UOM', 'AGGREGATE', 'SUPPLY CONDITION', 'order_qty']
+# --- STEP 2: Select Forecast Interval & Horizon (Flowchart Step 4 & 5) ---
+with st.sidebar:
+    st.header("Settings")
     
-    # Map columns case-insensitively
-    mapping = {col: req for req in required for col in df.columns if req.lower() == col.lower()}
-    df = df.rename(columns=mapping)
+    interval = st.selectbox("Select Forecast Interval", 
+                            ["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"])
     
-    if all(col in df.columns for col in required):
-        df['Date'] = pd.to_datetime(df['Date'])
-        df['order_qty'] = pd.to_numeric(df['order_qty'], errors='coerce').fillna(0)
-        return df, True
-    return df, False
+    horizon_map = {
+        "Day": 1, "Week": 7, "Month": 30, "Quarter": 90, 
+        "Year": 365, "3 years": 365*3, "5 years": 365*5
+    }
+    horizon_label = st.selectbox("Select Forecast Horizon", list(horizon_map.keys()))
 
-# --- 2. Forecasting Engines ---
-
-def get_statistical_forecast(history, method, horizon, params):
-    """Calculates the 5 specific business types"""
-    if method == "Historical Manager":
-        val = history[-1] if len(history) > 0 else 0
-        return [val] * horizon
-        
-    elif method == "Moving Average":
-        w = params.get('window', 3)
-        val = np.mean(history[-w:]) if len(history) >= w else np.mean(history)
-        return [val] * horizon
-        
-    elif method == "Weightage Average":
-        w = params.get('window', 3)
-        if len(history) >= w:
-            weights = np.arange(1, w + 1)
-            val = np.dot(history[-w:], weights) / weights.sum()
-        else:
-            val = np.mean(history)
-        return [val] * horizon
-        
-    elif method == "Ramp up Average":
-        base_avg = np.mean(history)
-        rate = params.get('ramp_rate', 0.05)
-        return [base_avg * (1 + rate * i) for i in range(1, horizon + 1)]
-        
-    elif method == "Exponentially":
-        alpha = params.get('alpha', 0.3)
-        try:
-            model = SimpleExpSmoothing(history).fit(smoothing_level=alpha, optimized=False)
-            return model.forecast(horizon)
-        except:
-            return [history[-1]] * horizon
-
-def get_ml_forecast(df, model_name, horizon):
-    """ML Regressor Engine: XGBoost, LightGBM, Random Forest"""
-    df = df.sort_values('Date').copy()
+    # --- STEP 3: Choose Forecast Techniques (Flowchart Step 6 & 7) ---
+    st.subheader("Forecast Techniques")
+    technique = st.selectbox("Method", 
+                             ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
     
-    # Feature Engineering
-    df['month'] = df['Date'].dt.month
-    df['year'] = df['Date'].dt.year
-    for i in range(1, 4): # Create 3 month lags
-        df[f'lag_{i}'] = df['order_qty'].shift(i)
-    
-    train = df.dropna()
-    if len(train) < 3: return [df['order_qty'].iloc[-1]] * horizon
-    
-    features = ['month', 'year', 'lag_1', 'lag_2', 'lag_3']
-    X, y = train[features], train['order_qty']
+    # Parameters for specific techniques
+    params = {}
+    if technique == "Moving Average" or technique == "Weightage Average":
+        params['window'] = st.slider("Window Size (Periods)", 2, 24, 3)
+    if technique == "Ramp Up Evenly":
+        params['growth'] = st.slider("Growth Rate (%)", 0, 50, 5) / 100
 
-    # Select Model
-    if model_name == "XGBoost":
-        model = XGBRegressor(n_estimators=100, learning_rate=0.1)
-    elif model_name == "LightGBM":
-        model = LGBMRegressor(n_estimators=100, verbosity=-1)
-    else: # Random Forest
-        model = RandomForestRegressor(n_estimators=100)
+# --- STEP 4: Upload Data File (Flowchart Step 8) ---
+uploaded_file = st.file_uploader("Upload your Data File (CSV or Excel)", type=['csv', 'xlsx'])
 
-    model.fit(X, y)
-
-    # Multi-step prediction
-    preds = []
-    last_row = train.iloc[-1]
-    curr_lag1, curr_lag2, curr_lag3 = last_row['order_qty'], last_row['lag_1'], last_row['lag_2']
-    curr_date = df['Date'].max()
-
-    for i in range(horizon):
-        curr_date += pd.DateOffset(months=1)
-        pred_feat = pd.DataFrame([[curr_date.month, curr_date.year, curr_lag1, curr_lag2, curr_lag3]], columns=features)
-        p = model.predict(pred_feat)[0]
-        p = max(0, p)
-        preds.append(p)
-        curr_lag3, curr_lag2, curr_lag1 = curr_lag2, curr_lag1, p
-        
-    return preds
-
-# --- 3. UI and Logic ---
+# Helper function to calculate steps needed for horizon
+def calculate_steps(interval, horizon_label):
+    # Rough estimate of steps based on selected interval and horizon
+    days = horizon_map[horizon_label]
+    if interval == "Daily": return days
+    if interval == "Weekly": return max(1, days // 7)
+    if interval == "Monthly": return max(1, days // 30)
+    if interval == "Quarterly": return max(1, days // 90)
+    if interval == "Year": return max(1, days // 365)
+    return 24 # Default for hourly
 
 if uploaded_file:
-    raw_data, success = clean_data(pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file))
-    
-    if not success:
-        st.error("Invalid file format. Ensure columns: Date, PARTNO, PART DESCRIPTION, qty_veh_1, UOM, AGGREGATE, SUPPLY CONDITION, order_qty")
-    else:
-        st.sidebar.header("Filter Selection")
-        selected_part = st.sidebar.selectbox("Select PARTNO", raw_data['PARTNO'].unique())
-        part_df = raw_data[raw_data['PARTNO'] == selected_part].sort_values('Date')
+    # Read Data
+    try:
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
         
-        st.sidebar.markdown("---")
-        st.sidebar.header("1. Choose Forecast Type")
-        stat_type = st.sidebar.selectbox("Business Method", ["Historical Manager", "Weightage Average", "Moving Average", "Ramp up Average", "Exponentially"])
+        # Standardize Columns
+        df.columns = df.columns.str.strip()
+        df['Date'] = pd.to_datetime(df['Date'])
+        df['order_qty'] = pd.to_numeric(df['order_qty'], errors='coerce').fillna(0)
         
-        st.sidebar.header("2. Choose ML Model")
-        ml_model_name = st.sidebar.selectbox("ML Regressor", ["XGBoost", "LightGBM", "Random Forest"])
-        
-        horizon = st.sidebar.slider("Forecast Months", 1, 12, 6)
-        
-        # Parameters for business logic
-        params = {}
-        if "Average" in stat_type: params['window'] = st.sidebar.number_input("Window size", 1, 12, 3)
-        if "Ramp" in stat_type: params['ramp_rate'] = st.sidebar.slider("Ramp Rate %", 0, 50, 5)/100
-        if "Exponentially" in stat_type: params['alpha'] = st.sidebar.slider("Alpha", 0.01, 1.0, 0.3)
+        # --- Logic for Product Wise vs Aggregate Wise ---
+        if analysis_type == "Product Wise":
+            parts = df['PARTNO'].unique()
+            selected_part = st.selectbox("Select Product (PARTNO)", parts)
+            working_df = df[df['PARTNO'] == selected_part].copy()
+        else:
+            st.info("Aggregating data for all products (Total Store View)")
+            working_df = df.copy()
 
-        # Calculate both forecasts
-        hist_vals = part_df['order_qty'].values
-        stat_preds = get_statistical_forecast(hist_vals, stat_type, horizon, params)
-        ml_preds = get_ml_forecast(part_df, ml_model_name, horizon)
+        # --- Resampling based on Interval ---
+        resample_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
+        working_df = working_df.set_index('Date').resample(resample_map[interval])['order_qty'].sum().reset_index()
         
-        # Prepare future dates
-        future_dates = [part_df['Date'].max() + pd.DateOffset(months=i) for i in range(1, horizon + 1)]
-        
-        # --- 4. Visualization ---
-        fig = go.Figure()
-        # History
-        fig.add_trace(go.Scatter(x=part_df['Date'], y=part_df['order_qty'], name="Past Actuals", line=dict(color="#2c3e50", width=3)))
-        # Statistical Forecast
-        fig.add_trace(go.Scatter(x=future_dates, y=stat_preds, name=f"Type: {stat_type}", line=dict(dash='dash', color='#e67e22')))
-        # ML Forecast
-        fig.add_trace(go.Scatter(x=future_dates, y=ml_preds, name=f"Model: {ml_model_name}", line=dict(dash='dot', color='#27ae60')))
-        
-        fig.update_layout(title=f"Comparison: {stat_type} vs {ml_model_name} for {selected_part}", 
-                          hovermode="x unified", template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
+        # --- STEP 5 & 6: Generate Forecast & Trend Analysis (Flowchart Step 9 & 10) ---
+        history = working_df['order_qty'].values
+        steps = calculate_steps(interval, horizon_label)
+        forecast_values = []
 
-        # --- 5. Download Table ---
-        st.subheader("Forecast Comparison Data")
-        
-        # Building the final dataframe
-        meta = part_df.iloc[0].drop(['Date', 'order_qty']).to_dict()
-        export_df = pd.DataFrame({
-            'Date': future_dates,
-            'Statistical_Forecast': stat_preds,
-            'ML_Forecast': ml_preds
-        })
-        for k, v in meta.items(): export_df[k] = v
-        
-        st.dataframe(export_df, use_container_width=True)
-        
-        csv = export_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Forecast Result", csv, f"{selected_part}_forecast.csv", "text/csv")
+        if len(history) > 0:
+            if technique == "Historical Average":
+                val = np.mean(history)
+                forecast_values = [val] * steps
+                
+            elif technique == "Moving Average":
+                w = params['window']
+                val = np.mean(history[-w:]) if len(history) >= w else np.mean(history)
+                forecast_values = [val] * steps
+                
+            elif technique == "Weightage Average":
+                w = params['window']
+                if len(history) >= w:
+                    weights = np.arange(1, w + 1)
+                    val = np.dot(history[-w:], weights) / weights.sum()
+                else: val = np.mean(history)
+                forecast_values = [val] * steps
+                
+            elif technique == "Ramp Up Evenly":
+                base = np.mean(history[-3:]) if len(history) >= 3 else np.mean(history)
+                forecast_values = [base * (1 + params['growth'] * i) for i in range(1, steps + 1)]
+                
+            elif technique == "Exponentially":
+                try:
+                    model = SimpleExpSmoothing(history, initialization_method="estimated").fit()
+                    forecast_values = model.forecast(steps)
+                except:
+                    forecast_values = [history[-1]] * steps
+
+            # Create Future Dates
+            last_date = working_df['Date'].max()
+            future_dates = pd.date_range(start=last_date, periods=steps + 1, freq=resample_map[interval])[1:]
+
+            # --- Visualization ---
+            fig = go.Figure()
+            # Past Data
+            fig.add_trace(go.Scatter(x=working_df['Date'], y=working_df['order_qty'], 
+                                     name="Historical Data", line=dict(color="#1f77b4", width=2)))
+            # Forecast Data
+            fig.add_trace(go.Scatter(x=future_dates, y=forecast_values, 
+                                     name=f"Forecast ({technique})", line=dict(color="#ff7f0e", dash='dash')))
+            
+            fig.update_layout(title=f"{analysis_type} Trend Analysis - {interval} Interval",
+                              xaxis_title="Timeline", yaxis_title="Quantity",
+                              template="plotly_white", hovermode="x unified")
+            
+            st.plotly_chart(fig, use_container_width=True)
+
+            # --- Data Table ---
+            st.subheader("Forecasted Figures")
+            forecast_df = pd.DataFrame({"Date": future_dates, "Forecasted_Qty": forecast_values})
+            st.dataframe(forecast_df, use_container_width=True)
+            
+            csv = forecast_df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Results", csv, "forecast_report.csv", "text/csv")
+
+    except Exception as e:
+        st.error(f"Error processing file: {e}. Please ensure your file has 'Date', 'order_qty', and 'PARTNO' columns.")
 
 else:
-    st.info("Please upload a file to start.")
-    st.image("https://via.placeholder.com/800x400.png?text=Upload+Data+to+View+Trend+Comparison", use_column_width=True)
+    st.info("Please upload a data file to begin the analysis.")
