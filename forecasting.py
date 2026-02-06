@@ -3,23 +3,26 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing
-from datetime import timedelta
 
-st.set_page_config(page_title="Order Forecasting System", layout="wide")
+st.set_page_config(page_title="Advanced Order Forecasting", layout="wide")
 
 # --- UI Header ---
-st.title("📊 Order Forecasting System")
+st.title("📊 Order Forecasting System (v2.0)")
 st.markdown("---")
 
-# --- STEP 1: Choose an Option (Flowchart Step 3) ---
+# --- 1. Choose an Option (Flowchart: Aggregate vs Product -> Model/Part) ---
 col1, col2 = st.columns(2)
 with col1:
-    analysis_type = st.radio("Choose Analysis Type", ["Aggregate Wise", "Product Wise"], horizontal=True)
+    main_option = st.radio("Choose Primary Option", ["Aggregate Wise", "Product Wise"], horizontal=True)
 
-# --- STEP 2: Select Forecast Interval & Horizon (Flowchart Step 4 & 5) ---
+sub_option = None
+if main_option == "Product Wise":
+    with col2:
+        sub_option = st.radio("Select Level", ["Model Wise", "Part No Wise"], horizontal=True)
+
+# --- 2. Select Forecast Interval & Horizon ---
 with st.sidebar:
-    st.header("Settings")
-    
+    st.header("Step 1: Configuration")
     interval = st.selectbox("Select Forecast Interval", 
                             ["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"])
     
@@ -29,67 +32,79 @@ with st.sidebar:
     }
     horizon_label = st.selectbox("Select Forecast Horizon", list(horizon_map.keys()))
 
-    # --- STEP 3: Choose Forecast Techniques (Flowchart Step 6 & 7) ---
-    st.subheader("Forecast Techniques")
-    technique = st.selectbox("Method", 
+    st.header("Step 2: Technique Settings")
+    technique = st.selectbox("Choose Forecast Technique", 
                              ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
     
-    # Parameters for specific techniques
+    # Specific logic based on new flowchart requirements
     params = {}
-    if technique == "Moving Average" or technique == "Weightage Average":
-        params['window'] = st.slider("Window Size (Periods)", 2, 24, 3)
-    if technique == "Ramp Up Evenly":
-        params['growth'] = st.slider("Growth Rate (%)", 0, 50, 5) / 100
+    if technique == "Weightage Average":
+        w_mode = st.radio("Weight Calculation", ["Automated (Even/Linear)", "Manual Entry"])
+        if w_mode == "Manual Entry":
+            weights_str = st.text_input("Enter weights (comma separated, e.g., 0.1, 0.3, 0.6)", "0.2, 0.3, 0.5")
+            params['weights'] = [float(x.strip()) for x in weights_str.split(",")]
+            params['window'] = len(params['weights'])
+        else:
+            params['window'] = st.number_input("Lookback Window", 2, 24, 3)
+            params['weights'] = None # Will calculate in logic
 
-# --- STEP 4: Upload Data File (Flowchart Step 8) ---
-uploaded_file = st.file_uploader("Upload your Data File (CSV or Excel)", type=['csv', 'xlsx'])
+    elif technique == "Moving Average":
+        params['window'] = st.slider("Moving Average Window", 2, 24, 3)
 
-# Helper function to calculate steps needed for horizon
+    elif technique == "Ramp Up Evenly":
+        # New Requirement: Manually entering of Interval Ramp up Factor
+        params['ramp_factor'] = st.number_input("Interval Ramp up Factor (Multiplier per period, e.g., 1.05 for 5% growth)", 
+                                               min_value=0.0, value=1.05, step=0.01)
+
+    elif technique == "Exponentially":
+        params['alpha'] = st.slider("Smoothing Factor (Alpha)", 0.0, 1.0, 0.3)
+
+# --- 3. Upload Data File ---
+uploaded_file = st.file_uploader("Upload Data File (CSV/Excel)", type=['csv', 'xlsx'])
+
 def calculate_steps(interval, horizon_label):
-    # Rough estimate of steps based on selected interval and horizon
     days = horizon_map[horizon_label]
     if interval == "Daily": return days
     if interval == "Weekly": return max(1, days // 7)
     if interval == "Monthly": return max(1, days // 30)
     if interval == "Quarterly": return max(1, days // 90)
     if interval == "Year": return max(1, days // 365)
-    return 24 # Default for hourly
+    return 24
 
 if uploaded_file:
-    # Read Data
     try:
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
-        else:
-            df = pd.read_excel(uploaded_file)
-        
-        # Standardize Columns
+        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         df.columns = df.columns.str.strip()
         df['Date'] = pd.to_datetime(df['Date'])
         df['order_qty'] = pd.to_numeric(df['order_qty'], errors='coerce').fillna(0)
-        
-        # --- Logic for Product Wise vs Aggregate Wise ---
-        if analysis_type == "Product Wise":
-            parts = df['PARTNO'].unique()
-            selected_part = st.selectbox("Select Product (PARTNO)", parts)
-            working_df = df[df['PARTNO'] == selected_part].copy()
-        else:
-            st.info("Aggregating data for all products (Total Store View)")
-            working_df = df.copy()
 
-        # --- Resampling based on Interval ---
+        # Handle Branching Logic (Aggregate vs Model vs Part)
+        if main_option == "Aggregate Wise":
+            working_df = df.copy()
+            title_suffix = "Total Aggregate"
+        else:
+            if sub_option == "Model Wise":
+                col_name = 'MODEL' if 'MODEL' in df.columns else 'PART DESCRIPTION'
+                selection = st.selectbox(f"Select {sub_option}", df[col_name].unique())
+                working_df = df[df[col_name] == selection].copy()
+                title_suffix = f"Model: {selection}"
+            else: # Part No Wise
+                selection = st.selectbox("Select Part Number", df['PARTNO'].unique())
+                working_df = df[df['PARTNO'] == selection].copy()
+                title_suffix = f"Part: {selection}"
+
+        # Resample data based on interval
         resample_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
         working_df = working_df.set_index('Date').resample(resample_map[interval])['order_qty'].sum().reset_index()
         
-        # --- STEP 5 & 6: Generate Forecast & Trend Analysis (Flowchart Step 9 & 10) ---
+        # --- 4. Generate Forecast & Trend Analysis ---
         history = working_df['order_qty'].values
         steps = calculate_steps(interval, horizon_label)
         forecast_values = []
 
         if len(history) > 0:
             if technique == "Historical Average":
-                val = np.mean(history)
-                forecast_values = [val] * steps
+                forecast_values = [np.mean(history)] * steps
                 
             elif technique == "Moving Average":
                 w = params['window']
@@ -97,53 +112,47 @@ if uploaded_file:
                 forecast_values = [val] * steps
                 
             elif technique == "Weightage Average":
-                w = params['window']
-                if len(history) >= w:
-                    weights = np.arange(1, w + 1)
-                    val = np.dot(history[-w:], weights) / weights.sum()
-                else: val = np.mean(history)
+                if params['weights']: # Manual
+                    w = params['window']
+                    if len(history) >= w:
+                        val = np.dot(history[-w:], params['weights']) / sum(params['weights'])
+                    else: val = np.mean(history)
+                else: # Automated (Linear weights)
+                    w = params['window']
+                    if len(history) >= w:
+                        weights = np.arange(1, w + 1)
+                        val = np.dot(history[-w:], weights) / weights.sum()
+                    else: val = np.mean(history)
                 forecast_values = [val] * steps
                 
             elif technique == "Ramp Up Evenly":
-                base = np.mean(history[-3:]) if len(history) >= 3 else np.mean(history)
-                forecast_values = [base * (1 + params['growth'] * i) for i in range(1, steps + 1)]
+                base = history[-1] if len(history) > 0 else 0
+                factor = params['ramp_factor']
+                forecast_values = [base * (factor ** i) for i in range(1, steps + 1)]
                 
             elif technique == "Exponentially":
-                try:
-                    model = SimpleExpSmoothing(history, initialization_method="estimated").fit()
-                    forecast_values = model.forecast(steps)
-                except:
-                    forecast_values = [history[-1]] * steps
+                model = SimpleExpSmoothing(history).fit(smoothing_level=params['alpha'], optimized=False)
+                forecast_values = model.forecast(steps)
 
-            # Create Future Dates
+            # Create Timeline
             last_date = working_df['Date'].max()
             future_dates = pd.date_range(start=last_date, periods=steps + 1, freq=resample_map[interval])[1:]
 
-            # --- Visualization ---
+            # --- 5. Show Trend Analysis (Line Chart) ---
             fig = go.Figure()
-            # Past Data
-            fig.add_trace(go.Scatter(x=working_df['Date'], y=working_df['order_qty'], 
-                                     name="Historical Data", line=dict(color="#1f77b4", width=2)))
-            # Forecast Data
-            fig.add_trace(go.Scatter(x=future_dates, y=forecast_values, 
-                                     name=f"Forecast ({technique})", line=dict(color="#ff7f0e", dash='dash')))
+            fig.add_trace(go.Scatter(x=working_df['Date'], y=working_df['order_qty'], name="Past Actuals", line=dict(color="#2c3e50")))
+            fig.add_trace(go.Scatter(x=future_dates, y=forecast_values, name="Future Forecast", line=dict(color="#e67e22", dash='dot')))
             
-            fig.update_layout(title=f"{analysis_type} Trend Analysis - {interval} Interval",
-                              xaxis_title="Timeline", yaxis_title="Quantity",
-                              template="plotly_white", hovermode="x unified")
-            
+            fig.update_layout(title=f"Trend Analysis: {title_suffix} ({technique})", 
+                              xaxis_title="Timeline", yaxis_title="Quantity", template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- Data Table ---
-            st.subheader("Forecasted Figures")
-            forecast_df = pd.DataFrame({"Date": future_dates, "Forecasted_Qty": forecast_values})
+            # Results Display
+            st.subheader("Forecasted Quantities")
+            forecast_df = pd.DataFrame({"Date": future_dates, "Forecast": forecast_values})
             st.dataframe(forecast_df, use_container_width=True)
-            
-            csv = forecast_df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Results", csv, "forecast_report.csv", "text/csv")
 
     except Exception as e:
-        st.error(f"Error processing file: {e}. Please ensure your file has 'Date', 'order_qty', and 'PARTNO' columns.")
-
+        st.error(f"Error: {e}. Please ensure your file has 'Date', 'order_qty', 'PARTNO', and 'MODEL' columns.")
 else:
-    st.info("Please upload a data file to begin the analysis.")
+    st.info("Follow the flowchart: Select your options, configure the technique, and upload your data file to see the Trend Analysis.")
