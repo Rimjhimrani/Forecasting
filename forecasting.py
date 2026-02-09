@@ -4,143 +4,142 @@ import numpy as np
 import plotly.graph_objects as go
 from xgboost import XGBRegressor
 
-st.set_page_config(page_title="XGBoost Order Forecasting", layout="wide")
+# Set Page Config
+st.set_page_config(page_title="Forecasting System", layout="centered")
 
-# --- UI Header ---
-st.title("🚀 XGBoost Machine Learning Forecasting")
-st.markdown("---")
+# --- CUSTOM CSS FOR FLOWCHART FEEL ---
+st.markdown("""
+    <style>
+    .step-header {
+        background-color: #f0f2f6;
+        padding: 10px;
+        border-radius: 10px;
+        border-left: 5px solid #007bff;
+        margin-bottom: 20px;
+        font-weight: bold;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- 1. Navigation Options ---
-col1, col2 = st.columns(2)
-with col1:
-    main_option = st.radio("Choose Primary Option", ["Aggregate Wise", "Product Wise"], horizontal=True)
+# --- APPLICATION START ---
+st.title("📦 Order Forecasting & Trend System")
+st.info("Follow the steps below to generate your forecast. Powered by XGBoost AI.")
 
-sub_option = None
-if main_option == "Product Wise":
-    with col2:
-        sub_option = st.radio("Select Level", ["Model Wise", "Part No Wise"], horizontal=True)
+# STEP 1: CHOOSE OPTION
+st.markdown('<div class="step-header">STEP 1: Choose Option</div>', unsafe_allow_html=True)
+main_choice = st.radio("Selection Type", ["Aggregate Wise", "Product Wise"], horizontal=True)
 
-# --- 2. Configuration Sidebar ---
-with st.sidebar:
-    st.header("📈 Forecast Settings")
-    interval = st.selectbox("Select Forecast Interval", ["Daily", "Weekly", "Monthly"])
-    
-    horizon_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365}
-    horizon_label = st.selectbox("Select Forecast Horizon", list(horizon_map.keys()))
+sub_choice = None
+if main_choice == "Product Wise":
+    sub_choice = st.radio("Product Level", ["Model Wise", "Part No Wise"], horizontal=True)
 
-    st.header("⚙️ XGBoost Parameters")
-    n_estimators = st.slider("Boosting Rounds (Trees)", 50, 1000, 200)
-    max_depth = st.slider("Tree Depth", 3, 15, 6)
-    learning_rate = st.select_slider("Learning Rate", options=[0.01, 0.05, 0.1, 0.2, 0.3], value=0.1)
+# STEP 2: SELECT INTERVAL & HORIZON
+st.markdown('<div class="step-header">STEP 2: Select Timeline</div>', unsafe_allow_html=True)
+col_a, col_b = st.columns(2)
 
-# --- 3. Feature Engineering Function ---
-def create_time_features(df):
-    """Converts date into numerical features for XGBoost"""
-    df = df.copy()
-    df['dayofweek'] = df['Date'].dt.dayofweek
-    df['quarter'] = df['Date'].dt.quarter
+with col_a:
+    interval = st.selectbox("Forecast Interval", 
+                            ["Daily", "Weekly", "Monthly", "Quarterly", "Year"])
+
+with col_b:
+    horizon_label = st.selectbox("Forecast Horizon", 
+                                ["Day", "Week", "Month", "Quarter", "Year", "3 years", "5 years"])
+
+# STEP 3: UPLOAD
+st.markdown('<div class="step-header">STEP 3: Upload Data File</div>', unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Upload Excel or CSV file", type=['xlsx', 'csv'])
+
+# --- FIXED XGBOOST LOGIC (Hidden from user) ---
+def run_xgb_forecast(data, steps, interval_type):
+    df = data.copy()
+    # Create simple features
+    df['day'] = df['Date'].dt.day
     df['month'] = df['Date'].dt.month
     df['year'] = df['Date'].dt.year
-    df['dayofyear'] = df['Date'].dt.dayofyear
-    df['dayofmonth'] = df['Date'].dt.day
-    return df
+    df['dayofweek'] = df['Date'].dt.dayofweek
+    
+    X = df[['day', 'month', 'year', 'dayofweek']]
+    y = df['order_qty']
+    
+    # Locked optimized parameters for non-tech users
+    model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.1, random_state=42)
+    model.fit(X, y)
+    
+    # Predict future
+    last_date = df['Date'].max()
+    res_map = {"Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
+    future_dates = pd.date_range(start=last_date, periods=steps + 1, freq=res_map[interval_type])[1:]
+    
+    f_df = pd.DataFrame({'Date': future_dates})
+    f_df['day'] = f_df['Date'].dt.day
+    f_df['month'] = f_df['Date'].dt.month
+    f_df['year'] = f_df['Date'].dt.year
+    f_df['dayofweek'] = f_df['Date'].dt.dayofweek
+    
+    preds = model.predict(f_df[['day', 'month', 'year', 'dayofweek']])
+    return future_dates, np.maximum(preds, 0)
 
-# --- 4. Data Processing Logic ---
-uploaded_file = st.file_uploader("Upload Data File (CSV/Excel)", type=['csv', 'xlsx'])
-
+# PROCESS DATA
 if uploaded_file:
     try:
-        # Load Raw Data
-        raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-        raw_df.columns = raw_df.columns.str.strip()
+        raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+        raw.columns = raw.columns.str.strip()
 
-        # DETECT FORMAT AND CONVERT
-        # Logic for Image 1 (Wide format: MODEL col + Date cols)
-        if 'MODEL' in raw_df.columns and any('-20' in str(col) for col in raw_df.columns):
-            df_long = raw_df.melt(id_vars=['MODEL'], var_name='Date', value_name='order_qty')
+        # Handle Wide Format (Image 1) or Long Format (Image 2)
+        if 'MODEL' in raw.columns and any('-20' in str(c) for c in raw.columns):
+            df_long = raw.melt(id_vars=['MODEL'], var_name='Date', value_name='order_qty')
             df_long['Date'] = pd.to_datetime(df_long['Date'], dayfirst=True, errors='coerce')
-        
-        # Logic for Image 2 (Long format: Part No, Model, Date columns)
         else:
-            df_long = raw_df.copy()
-            # Standardize names from your second image
-            col_rename = {'Part No': 'PARTNO', 'Qty/Veh': 'order_qty', 'Model': 'MODEL'}
-            df_long.rename(columns=col_rename, inplace=True)
+            df_long = raw.copy()
+            df_long.rename(columns={'Part No': 'PARTNO', 'Qty/Veh': 'order_qty', 'Model': 'MODEL'}, inplace=True)
             df_long['Date'] = pd.to_datetime(df_long['Date'], errors='coerce')
 
         df_long = df_long.dropna(subset=['Date', 'order_qty'])
 
-        # FILTERING BASED ON UI SELECTION
-        if main_option == "Aggregate Wise":
-            working_df = df_long.groupby('Date')['order_qty'].sum().reset_index()
-            title_text = "Total Aggregate Demand"
-        elif sub_option == "Model Wise":
-            selection = st.selectbox("Select Model", df_long['MODEL'].unique())
-            working_df = df_long[df_long['MODEL'] == selection].groupby('Date')['order_qty'].sum().reset_index()
-            title_text = f"Model Demand: {selection}"
-        else: # Part No Wise
-            selection = st.selectbox("Select Part Number", df_long['PARTNO'].unique())
-            working_df = df_long[df_long['PARTNO'] == selection].groupby('Date')['order_qty'].sum().reset_index()
-            title_text = f"Part Demand: {selection}"
-
-        # RESAMPLE DATA
-        res_map = {"Daily": "D", "Weekly": "W", "Monthly": "M"}
-        working_df = working_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
-
-        if len(working_df) < 5:
-            st.error("Insufficient historical data for XGBoost (minimum 5 data points required).")
+        # Dropdowns for specific item selection
+        target_df = None
+        item_label = "Total"
+        
+        if main_choice == "Aggregate Wise":
+            target_df = df_long.groupby('Date')['order_qty'].sum().reset_index()
+        elif sub_choice == "Model Wise":
+            m_list = df_long['MODEL'].unique()
+            selected_m = st.selectbox("Select Model to Forecast", m_list)
+            target_df = df_long[df_long['MODEL'] == selected_m].groupby('Date')['order_qty'].sum().reset_index()
+            item_label = selected_m
         else:
-            # --- 5. MODEL TRAINING ---
-            train_features = create_time_features(working_df)
-            X = train_features[['dayofweek', 'quarter', 'month', 'year', 'dayofyear', 'dayofmonth']]
-            y = train_features['order_qty']
+            p_list = df_long['PARTNO'].unique()
+            selected_p = st.selectbox("Select Part Number to Forecast", p_list)
+            target_df = df_long[df_long['PARTNO'] == selected_p].groupby('Date')['order_qty'].sum().reset_index()
+            item_label = selected_p
 
-            model = XGBRegressor(
-                n_estimators=n_estimators,
-                max_depth=max_depth,
-                learning_rate=learning_rate,
-                random_state=42
-            )
-            model.fit(X, y)
-
-            # --- 6. FORECASTING FUTURE ---
-            # Calculate steps based on interval
-            steps = horizon_map[horizon_label]
-            if interval == "Weekly": steps = max(1, steps // 7)
-            if interval == "Monthly": steps = max(1, steps // 30)
-
-            last_date = working_df['Date'].max()
-            future_dates = pd.date_range(start=last_date, periods=steps + 1, freq=res_map[interval])[1:]
+        # STEP 4: GENERATE
+        st.markdown('<div class="step-header">STEP 4: Execution</div>', unsafe_allow_html=True)
+        if st.button("🚀 Generate Forecast and Trend Analysis", use_container_width=True):
             
-            future_df = pd.DataFrame({'Date': future_dates})
-            future_X = create_time_features(future_df)[['dayofweek', 'quarter', 'month', 'year', 'dayofyear', 'dayofmonth']]
-            
-            # Predict
-            preds = model.predict(future_X)
-            preds = np.maximum(preds, 0) # Remove negative forecasts
+            # Map Horizon to steps
+            h_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365, "3 years": 365*3, "5 years": 365*5}
+            steps = h_map[horizon_label]
+            if interval == "Weekly": steps //= 7
+            if interval == "Monthly": steps //= 30
+            if interval == "Quarterly": steps //= 90
+            if interval == "Year": steps //= 365
+            steps = max(1, int(steps))
 
-            # --- 7. VISUALIZATION ---
+            # Run ML
+            f_dates, f_values = run_xgb_forecast(target_df, steps, interval)
+
+            # PLOT
             fig = go.Figure()
-            # Historical
-            fig.add_trace(go.Scatter(x=working_df['Date'], y=working_df['order_qty'], 
-                                     name="Actual History", line=dict(color="#34495e", width=2)))
-            # Forecast
-            fig.add_trace(go.Scatter(x=future_dates, y=preds, 
-                                     name="XGBoost Forecast", line=dict(color="#e74c3c", width=3, dash='dot')))
-            
-            fig.update_layout(title=f"Trend Analysis: {title_text}", 
-                              xaxis_title="Date", yaxis_title="Quantity", template="plotly_white")
-            st.plotly_chart(fig, use_container_width=True)
+            fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['order_qty'], name="Past Data", line=dict(color="#2c3e50")))
+            fig.add_trace(go.Scatter(x=f_dates, y=f_values, name="AI Forecast", line=dict(color="#e74c3c", dash='dot')))
+            fig.update_layout(title=f"Trend Analysis for {item_label}", template="plotly_white")
+            st.plotly_chart(fig)
 
-            # Display Data Table
-            st.subheader("Forecasted Quantities")
-            forecast_table = pd.DataFrame({
-                "Forecast Date": future_dates.strftime('%d-%m-%Y'),
-                "Predicted Quantity": np.round(preds, 2)
-            })
-            st.dataframe(forecast_table, use_container_width=True)
+            # DISPLAY TABLE
+            st.subheader("Future Forecast Values")
+            res_df = pd.DataFrame({"Date": f_dates.strftime('%d-%m-%Y'), "Predicted Qty": np.round(f_values, 1)})
+            st.dataframe(res_df, use_container_width=True)
 
     except Exception as e:
-        st.error(f"Error: {e}. Please ensure column names match the uploaded images.")
-else:
-    st.info("Please upload your historical data file (Image 1 or Image 2 format) to generate an XGBoost forecast.")
+        st.error(f"Error reading file. Please check your columns. Error: {e}")
