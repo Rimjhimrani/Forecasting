@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from xgboost import XGBRegressor
 
 # --- UI Setup ---
-st.set_page_config(page_title="Fast Forecasting System", layout="centered")
+st.set_page_config(page_title="Forecasting System", layout="centered")
 
 st.markdown("""
     <style>
@@ -13,14 +13,14 @@ st.markdown("""
         background-color: #f8f9fa;
         padding: 10px;
         border-radius: 8px;
-        border-left: 5px solid #28a745;
+        border-left: 5px solid #007bff;
         margin-bottom: 15px;
         font-weight: bold;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("⚡ Fast AI Order Forecasting")
+st.title("📦 Intelligent Order Forecasting")
 
 # --- STEP 1: CHOOSE AN OPTION ---
 st.markdown('<div class="step-header">STEP 1: Choose an Option</div>', unsafe_allow_html=True)
@@ -42,24 +42,42 @@ with c2:
 st.markdown('<div class="step-header">STEP 3: Upload Data File</div>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader("Upload Wide-Format Excel/CSV", type=['xlsx', 'csv'])
 
-# --- SPEED OPTIMIZED AI ENGINE ---
+# --- SPEED & SAFETY OPTIMIZED ENGINE ---
 @st.cache_data(show_spinner=False)
-def fast_transform_data(file_content, is_csv):
-    """Caches the heavy data transformation process"""
+def safe_transform_data(file_content, is_csv):
+    """Cleans the 'Wide' data and handles non-date columns safely"""
     raw = pd.read_csv(file_content) if is_csv else pd.read_excel(file_content)
-    raw.columns = raw.columns.str.strip()
+    raw.columns = raw.columns.astype(str).str.strip()
+    
+    # Identify the ID column (the first one, like 'MODEL')
     id_col = raw.columns[0]
     
-    # Melt wide to long
-    df_long = raw.melt(id_vars=[id_col], var_name='Date', value_name='order_qty')
-    df_long['Date'] = pd.to_datetime(df_long['Date'], dayfirst=True, errors='coerce')
-    df_long = df_long.dropna(subset=['Date'])
+    # Identify Date Columns: Only keep columns that can be converted to dates
+    date_cols = []
+    for col in raw.columns[1:]:
+        try:
+            pd.to_datetime(col, dayfirst=True)
+            date_cols.append(col)
+        except:
+            continue # Skip columns that aren't dates (like empty ones)
+
+    # Melt the data
+    df_long = raw.melt(id_vars=[id_col], value_vars=date_cols, var_name='Date', value_name='order_qty')
+    
+    # Convert and Sort
+    df_long['Date'] = pd.to_datetime(df_long['Date'], dayfirst=True)
+    df_long['order_qty'] = pd.to_numeric(df_long['order_qty'], errors='coerce').fillna(0)
+    df_long = df_long.sort_values('Date').dropna(subset=['Date'])
+    
     return df_long, id_col
 
-def run_fast_forecast(data, horizon_days, interval_type):
-    """Optimized XGBoost Training"""
+def run_safe_forecast(data, horizon_days, interval_type):
+    """XGBoost logic with safety checks for NaT errors"""
     df = data.copy()
     
+    if df.empty or df['Date'].isnull().all():
+        return None, None
+
     # Fast Feature Extraction
     df['h'] = df['Date'].dt.hour
     df['d'] = df['Date'].dt.day
@@ -70,20 +88,26 @@ def run_fast_forecast(data, horizon_days, interval_type):
     X = df[['h', 'd', 'm', 'y', 'dw']]
     y = df['order_qty']
     
-    # Faster parameters: Reduced n_estimators from 500 to 100
-    model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42, n_jobs=-1)
+    model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42)
     model.fit(X, y)
     
-    # Forecast Generation
+    # Resample Map
     res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
     freq = res_map[interval_type]
     
+    # SAFE DATE RANGE CALCULATION
     last_date = df['Date'].max()
+    if pd.isnull(last_date):
+        return None, None
+        
     end_date = last_date + pd.Timedelta(days=horizon_days)
     
-    future_dates = pd.date_range(start=last_date, end=end_date, freq=freq)[1:]
-    if len(future_dates) == 0:
-        future_dates = pd.date_range(start=last_date, periods=2, freq=freq)[1:]
+    # Generate future dates
+    future_dates = pd.date_range(start=last_date, end=end_date, freq=freq)
+    if len(future_dates) <= 1:
+        future_dates = pd.date_range(start=last_date, periods=2, freq=freq)
+    
+    future_dates = future_dates[1:] # Remove the overlap with today
 
     f_df = pd.DataFrame({'Date': future_dates})
     f_df['h'] = f_df['Date'].dt.hour
@@ -98,16 +122,14 @@ def run_fast_forecast(data, horizon_days, interval_type):
 # --- EXECUTION ---
 if uploaded_file:
     try:
-        # Load and transform (cached)
-        df_long, id_col = fast_transform_data(uploaded_file, uploaded_file.name.endswith('.csv'))
+        df_long, id_col = safe_transform_data(uploaded_file, uploaded_file.name.endswith('.csv'))
         
-        # Filter Logic
         if main_choice == "Aggregate Wise":
             target_df = df_long.groupby('Date')['order_qty'].sum().reset_index()
-            item_label = "Total Aggregate"
+            item_label = "Aggregate Demand"
         else:
             options = df_long[id_col].unique()
-            selected_item = st.selectbox(f"Select {id_col}", options)
+            selected_item = st.selectbox(f"Select from {id_col}", options)
             target_df = df_long[df_long[id_col] == selected_item].copy()
             item_label = str(selected_item)
 
@@ -116,24 +138,26 @@ if uploaded_file:
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
         st.markdown('<div class="step-header">STEP 4: Execution</div>', unsafe_allow_html=True)
-        if st.button("🚀 Generate Forecast Now", use_container_width=True):
-            with st.spinner('AI is calculating...'):
-                h_days = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365, "3 years": 1095, "5 years": 1825}
+        if st.button("🚀 Generate Forecast and Trend Analysis", use_container_width=True):
+            with st.spinner('Analyzing patterns...'):
+                h_days_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365, "3 years": 1095, "5 years": 1825}
                 
-                # Run the forecast
-                f_dates, f_values = run_fast_forecast(target_df, h_days[horizon_label], interval)
+                f_dates, f_values = run_safe_forecast(target_df, h_days_map[horizon_label], interval)
 
-                # Visualization
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['order_qty'], name="History", line=dict(color="#2c3e50")))
-                fig.add_trace(go.Scatter(x=f_dates, y=f_values, name="Forecast", line=dict(color="#28a745", dash='dot')))
-                fig.update_layout(title=f"Trend Analysis: {item_label}", template="plotly_white", margin=dict(l=0,r=0,t=40,b=0))
-                st.plotly_chart(fig, use_container_width=True)
+                if f_dates is not None:
+                    # Visualization
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['order_qty'], name="History", line=dict(color="#2c3e50")))
+                    fig.add_trace(go.Scatter(x=f_dates, y=f_values, name="AI Forecast", line=dict(color="#e67e22", dash='dot')))
+                    fig.update_layout(title=f"Trend Analysis: {item_label}", template="plotly_white")
+                    st.plotly_chart(fig, use_container_width=True)
 
-                # Data Table
-                fmt = '%d-%m-%Y %H:%M' if interval == "Hourly" else '%d-%m-%Y'
-                res_df = pd.DataFrame({"Date": f_dates.strftime(fmt), "Forecast Qty": np.round(f_values, 1)})
-                st.dataframe(res_df, use_container_width=True)
+                    # Table
+                    date_fmt = '%d-%m-%Y %H:%M' if interval == "Hourly" else '%d-%m-%Y'
+                    res_df = pd.DataFrame({"Forecast Date": f_dates.strftime(date_fmt), "Quantity": np.round(f_values, 1)})
+                    st.dataframe(res_df, use_container_width=True)
+                else:
+                    st.error("Could not generate forecast. Please check if your file has valid dates in the column headers.")
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error processing data: {e}")
