@@ -2,12 +2,16 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from statsmodels.tsa.holtwinters import SimpleExpSmoothing
 
-st.set_page_config(page_title="Advanced Order Forecasting", layout="wide")
+# Machine Learning Imports
+from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+
+st.set_page_config(page_title="ML Order Forecasting", layout="wide")
 
 # --- UI Header ---
-st.title("📊 Order Forecasting System (v2.0)")
+st.title("🚀 ML-Powered Order Forecasting (RF / XGB / LGBM)")
 st.markdown("---")
 
 # --- 1. Choose an Option ---
@@ -23,50 +27,32 @@ if main_option == "Product Wise":
 # --- 2. Configuration Sidebar ---
 with st.sidebar:
     st.header("Step 1: Configuration")
-    interval = st.selectbox("Select Forecast Interval", 
-                            ["Daily", "Weekly", "Monthly", "Quarterly", "Year"])
+    interval = st.selectbox("Select Forecast Interval", ["Daily", "Weekly", "Monthly"])
     
-    horizon_map = {
-        "Day": 1, "Week": 7, "Month": 30, "Quarter": 90, 
-        "Year": 365, "3 years": 365*3, "5 years": 365*5
-    }
+    horizon_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365}
     horizon_label = st.selectbox("Select Forecast Horizon", list(horizon_map.keys()))
 
-    st.header("Step 2: Technique Settings")
-    technique = st.selectbox("Choose Forecast Technique", 
-                             ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
+    st.header("Step 2: ML Model Settings")
+    technique = st.selectbox("Choose ML Model", ["Random Forest", "XGBoost", "LightGBM"])
     
-    params = {}
-    if technique == "Weightage Average":
-        w_mode = st.radio("Weight Calculation", ["Automated (Even/Linear)", "Manual Entry"])
-        if w_mode == "Manual Entry":
-            weights_str = st.text_input("Enter weights (e.g., 0.2, 0.3, 0.5)", "0.2, 0.3, 0.5")
-            params['weights'] = [float(x.strip()) for x in weights_str.split(",")]
-            params['window'] = len(params['weights'])
-        else:
-            params['window'] = st.number_input("Lookback Window", 2, 24, 3)
-            params['weights'] = None
+    # Model Hyperparameters
+    n_estimators = st.slider("Number of Trees (Estimators)", 50, 500, 100)
+    max_depth = st.slider("Max Depth", 3, 20, 10)
 
-    elif technique == "Moving Average":
-        params['window'] = st.slider("Moving Average Window", 2, 24, 3)
+# --- 3. Helper Functions for ML ---
+def create_features(df):
+    """Extracts features from the date index for ML models"""
+    df = df.copy()
+    df['dayofweek'] = df['Date'].dt.dayofweek
+    df['quarter'] = df['Date'].dt.quarter
+    df['month'] = df['Date'].dt.month
+    df['year'] = df['Date'].dt.year
+    df['dayofyear'] = df['Date'].dt.dayofyear
+    df['dayofmonth'] = df['Date'].dt.day
+    return df
 
-    elif technique == "Ramp Up Evenly":
-        params['ramp_factor'] = st.number_input("Interval Ramp up Factor (e.g. 1.05)", min_value=0.0, value=1.05, step=0.01)
-
-    elif technique == "Exponentially":
-        params['alpha'] = st.slider("Smoothing Factor (Alpha)", 0.0, 1.0, 0.3)
-
-# --- 3. Upload and Process Data ---
+# --- 4. Upload and Process Data ---
 uploaded_file = st.file_uploader("Upload Data File (CSV/Excel)", type=['csv', 'xlsx'])
-
-def calculate_steps(interval, horizon_label):
-    days = horizon_map[horizon_label]
-    if interval == "Daily": return days
-    if interval == "Weekly": return max(1, days // 7)
-    if interval == "Monthly": return max(1, days // 30)
-    if interval == "Quarterly": return max(1, days // 90)
-    if interval == "Year": return max(1, days // 365)
-    return 1
 
 if uploaded_file:
     try:
@@ -74,84 +60,84 @@ if uploaded_file:
         raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         raw_df.columns = raw_df.columns.str.strip()
 
-        # DATA TRANSFORMATION LOGIC
-        if main_option == "Aggregate Wise" or (main_option == "Product Wise" and sub_option == "Model Wise"):
-            # Logic for Image 1 (Wide Format: MODEL, 01-01-2026, 02-01-2026...)
+        # Handle Format 1 (Wide: Dates as Columns) or Format 2 (Long: Date column)
+        if 'MODEL' in raw_df.columns and any('-' in col for col in raw_df.columns):
+            # Wide format (Image 1)
             df_long = raw_df.melt(id_vars=['MODEL'], var_name='Date', value_name='order_qty')
             df_long['Date'] = pd.to_datetime(df_long['Date'], dayfirst=True, errors='coerce')
-            df_long = df_long.dropna(subset=['Date'])
-            
-            if main_option == "Aggregate Wise":
-                working_df = df_long.groupby('Date')['order_qty'].sum().reset_index()
-                title_suffix = "Total Aggregate"
-            else:
-                selection = st.selectbox("Select Model", df_long['MODEL'].unique())
-                working_df = df_long[df_long['MODEL'] == selection].copy()
-                title_suffix = f"Model: {selection}"
-
         else:
-            # Logic for Image 2 (Long Format: Part No, Model, Date, Qty/Veh...)
-            # Standardizing column names for the engine
-            col_map = {'Part No': 'PARTNO', 'Qty/Veh': 'order_qty'}
-            raw_df = raw_df.rename(columns=col_map)
-            raw_df['Date'] = pd.to_datetime(raw_df['Date'], errors='coerce')
-            
-            selection = st.selectbox("Select Part Number", raw_df['PARTNO'].unique())
-            working_df = raw_df[raw_df['PARTNO'] == selection].copy()
+            # Long format (Image 2)
+            df_long = raw_df.copy()
+            df_long.rename(columns={'Part No': 'PARTNO', 'Qty/Veh': 'order_qty'}, inplace=True)
+            df_long['Date'] = pd.to_datetime(df_long['Date'], errors='coerce')
+
+        df_long = df_long.dropna(subset=['Date'])
+
+        # Filter Logic
+        if main_option == "Aggregate Wise":
+            working_df = df_long.groupby('Date')['order_qty'].sum().reset_index()
+            title_suffix = "Aggregate"
+        elif sub_option == "Model Wise":
+            selection = st.selectbox("Select Model", df_long['MODEL'].unique())
+            working_df = df_long[df_long['MODEL'] == selection].copy()
+            title_suffix = f"Model: {selection}"
+        else:
+            selection = st.selectbox("Select Part Number", df_long['PARTNO'].unique())
+            working_df = df_long[df_long['PARTNO'] == selection].copy()
             title_suffix = f"Part: {selection}"
 
-        # Ensure numeric
-        working_df['order_qty'] = pd.to_numeric(working_df['order_qty'], errors='coerce').fillna(0)
-
-        # Resample data based on interval
-        resample_map = {"Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
+        # Resample
+        resample_map = {"Daily": "D", "Weekly": "W", "Monthly": "M"}
         working_df = working_df.set_index('Date').resample(resample_map[interval])['order_qty'].sum().reset_index()
         
-        # --- 4. Forecasting Engine ---
-        history = working_df['order_qty'].values
-        steps = calculate_steps(interval, horizon_label)
-        forecast_values = []
+        if len(working_df) < 3:
+            st.warning("Not enough historical data points to train a Machine Learning model. Please provide more dates.")
+        else:
+            # --- 5. Training Logic ---
+            train_data = create_features(working_df)
+            X = train_data[['dayofweek', 'quarter', 'month', 'year', 'dayofyear', 'dayofmonth']]
+            y = train_data['order_qty']
 
-        if len(history) > 0:
-            if technique == "Historical Average":
-                forecast_values = [np.mean(history)] * steps
-            elif technique == "Moving Average":
-                w = params['window']
-                val = np.mean(history[-w:]) if len(history) >= w else np.mean(history)
-                forecast_values = [val] * steps
-            elif technique == "Weightage Average":
-                w = params['window']
-                if params.get('weights'):
-                    val = np.dot(history[-w:], params['weights']) / sum(params['weights']) if len(history) >= w else np.mean(history)
-                else:
-                    weights = np.arange(1, w + 1)
-                    val = np.dot(history[-w:], weights) / weights.sum() if len(history) >= w else np.mean(history)
-                forecast_values = [val] * steps
-            elif technique == "Ramp Up Evenly":
-                base = history[-1]
-                forecast_values = [base * (params['ramp_factor'] ** i) for i in range(1, steps + 1)]
-            elif technique == "Exponentially":
-                model = SimpleExpSmoothing(history).fit(smoothing_level=params['alpha'], optimized=False)
-                forecast_values = model.forecast(steps)
+            # Model Initialization
+            if technique == "Random Forest":
+                model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
+            elif technique == "XGBoost":
+                model = XGBRegressor(n_estimators=n_estimators, max_depth=max_depth, learning_rate=0.1)
+            else: # LightGBM
+                model = LGBMRegressor(n_estimators=n_estimators, max_depth=max_depth, learning_rate=0.1)
 
-            # --- 5. Visualization ---
+            model.fit(X, y)
+
+            # --- 6. Forecasting Logic ---
+            steps = horizon_map[horizon_label]
+            if interval == "Weekly": steps = max(1, steps // 7)
+            if interval == "Monthly": steps = max(1, steps // 30)
+
             last_date = working_df['Date'].max()
             future_dates = pd.date_range(start=last_date, periods=steps + 1, freq=resample_map[interval])[1:]
+            
+            # Create features for future dates
+            future_df = pd.DataFrame({'Date': future_dates})
+            future_features = create_features(future_df)[['dayofweek', 'quarter', 'month', 'year', 'dayofyear', 'dayofmonth']]
+            
+            # Prediction
+            forecast_values = model.predict(future_features)
+            forecast_values = np.maximum(forecast_values, 0) # Ensure no negative demand
 
+            # --- 7. Visualization ---
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=working_df['Date'], y=working_df['order_qty'], name="Past Actuals", line=dict(color="#2c3e50")))
-            fig.add_trace(go.Scatter(x=future_dates, y=forecast_values, name="Future Forecast", line=dict(color="#e67e22", dash='dot')))
+            fig.add_trace(go.Scatter(x=future_dates, y=forecast_values, name=f"ML Forecast ({technique})", line=dict(color="#16a085", dash='dash')))
             
-            fig.update_layout(title=f"Trend Analysis: {title_suffix} ({technique})", 
-                              xaxis_title="Timeline", yaxis_title="Quantity", template="plotly_white")
+            fig.update_layout(title=f"Trend Analysis: {title_suffix} using {technique}", template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
             # Results Table
             st.subheader("Forecasted Results")
-            forecast_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "Forecast Qty": np.round(forecast_values, 2)})
-            st.dataframe(forecast_df, use_container_width=True)
+            results_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "Predicted Qty": np.round(forecast_values, 2)})
+            st.dataframe(results_df, use_container_width=True)
 
     except Exception as e:
-        st.error(f"Error processing file: {e}. Please ensure your file columns match the template.")
+        st.error(f"An error occurred: {e}")
 else:
-    st.info("Upload your Excel/CSV file to begin. The system supports both Model-Horizontal (Wide) and Partwise-Vertical (Long) formats.")
+    st.info("Please upload your data file to begin the ML forecasting.")
