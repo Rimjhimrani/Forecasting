@@ -2,19 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-
-# Machine Learning Imports
-from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
 
-st.set_page_config(page_title="ML Order Forecasting", layout="wide")
+st.set_page_config(page_title="XGBoost Order Forecasting", layout="wide")
 
 # --- UI Header ---
-st.title("🚀 ML-Powered Order Forecasting (RF / XGB / LGBM)")
+st.title("🚀 XGBoost Machine Learning Forecasting")
 st.markdown("---")
 
-# --- 1. Choose an Option ---
+# --- 1. Navigation Options ---
 col1, col2 = st.columns(2)
 with col1:
     main_option = st.radio("Choose Primary Option", ["Aggregate Wise", "Product Wise"], horizontal=True)
@@ -26,22 +22,20 @@ if main_option == "Product Wise":
 
 # --- 2. Configuration Sidebar ---
 with st.sidebar:
-    st.header("Step 1: Configuration")
+    st.header("📈 Forecast Settings")
     interval = st.selectbox("Select Forecast Interval", ["Daily", "Weekly", "Monthly"])
     
     horizon_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365}
     horizon_label = st.selectbox("Select Forecast Horizon", list(horizon_map.keys()))
 
-    st.header("Step 2: ML Model Settings")
-    technique = st.selectbox("Choose ML Model", ["Random Forest", "XGBoost", "LightGBM"])
-    
-    # Model Hyperparameters
-    n_estimators = st.slider("Number of Trees (Estimators)", 50, 500, 100)
-    max_depth = st.slider("Max Depth", 3, 20, 10)
+    st.header("⚙️ XGBoost Parameters")
+    n_estimators = st.slider("Boosting Rounds (Trees)", 50, 1000, 200)
+    max_depth = st.slider("Tree Depth", 3, 15, 6)
+    learning_rate = st.select_slider("Learning Rate", options=[0.01, 0.05, 0.1, 0.2, 0.3], value=0.1)
 
-# --- 3. Helper Functions for ML ---
-def create_features(df):
-    """Extracts features from the date index for ML models"""
+# --- 3. Feature Engineering Function ---
+def create_time_features(df):
+    """Converts date into numerical features for XGBoost"""
     df = df.copy()
     df['dayofweek'] = df['Date'].dt.dayofweek
     df['quarter'] = df['Date'].dt.quarter
@@ -51,7 +45,7 @@ def create_features(df):
     df['dayofmonth'] = df['Date'].dt.day
     return df
 
-# --- 4. Upload and Process Data ---
+# --- 4. Data Processing Logic ---
 uploaded_file = st.file_uploader("Upload Data File (CSV/Excel)", type=['csv', 'xlsx'])
 
 if uploaded_file:
@@ -60,84 +54,93 @@ if uploaded_file:
         raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         raw_df.columns = raw_df.columns.str.strip()
 
-        # Handle Format 1 (Wide: Dates as Columns) or Format 2 (Long: Date column)
-        if 'MODEL' in raw_df.columns and any('-' in col for col in raw_df.columns):
-            # Wide format (Image 1)
+        # DETECT FORMAT AND CONVERT
+        # Logic for Image 1 (Wide format: MODEL col + Date cols)
+        if 'MODEL' in raw_df.columns and any('-20' in str(col) for col in raw_df.columns):
             df_long = raw_df.melt(id_vars=['MODEL'], var_name='Date', value_name='order_qty')
             df_long['Date'] = pd.to_datetime(df_long['Date'], dayfirst=True, errors='coerce')
+        
+        # Logic for Image 2 (Long format: Part No, Model, Date columns)
         else:
-            # Long format (Image 2)
             df_long = raw_df.copy()
-            df_long.rename(columns={'Part No': 'PARTNO', 'Qty/Veh': 'order_qty'}, inplace=True)
+            # Standardize names from your second image
+            col_rename = {'Part No': 'PARTNO', 'Qty/Veh': 'order_qty', 'Model': 'MODEL'}
+            df_long.rename(columns=col_rename, inplace=True)
             df_long['Date'] = pd.to_datetime(df_long['Date'], errors='coerce')
 
-        df_long = df_long.dropna(subset=['Date'])
+        df_long = df_long.dropna(subset=['Date', 'order_qty'])
 
-        # Filter Logic
+        # FILTERING BASED ON UI SELECTION
         if main_option == "Aggregate Wise":
             working_df = df_long.groupby('Date')['order_qty'].sum().reset_index()
-            title_suffix = "Aggregate"
+            title_text = "Total Aggregate Demand"
         elif sub_option == "Model Wise":
             selection = st.selectbox("Select Model", df_long['MODEL'].unique())
-            working_df = df_long[df_long['MODEL'] == selection].copy()
-            title_suffix = f"Model: {selection}"
-        else:
+            working_df = df_long[df_long['MODEL'] == selection].groupby('Date')['order_qty'].sum().reset_index()
+            title_text = f"Model Demand: {selection}"
+        else: # Part No Wise
             selection = st.selectbox("Select Part Number", df_long['PARTNO'].unique())
-            working_df = df_long[df_long['PARTNO'] == selection].copy()
-            title_suffix = f"Part: {selection}"
+            working_df = df_long[df_long['PARTNO'] == selection].groupby('Date')['order_qty'].sum().reset_index()
+            title_text = f"Part Demand: {selection}"
 
-        # Resample
-        resample_map = {"Daily": "D", "Weekly": "W", "Monthly": "M"}
-        working_df = working_df.set_index('Date').resample(resample_map[interval])['order_qty'].sum().reset_index()
-        
-        if len(working_df) < 3:
-            st.warning("Not enough historical data points to train a Machine Learning model. Please provide more dates.")
+        # RESAMPLE DATA
+        res_map = {"Daily": "D", "Weekly": "W", "Monthly": "M"}
+        working_df = working_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
+
+        if len(working_df) < 5:
+            st.error("Insufficient historical data for XGBoost (minimum 5 data points required).")
         else:
-            # --- 5. Training Logic ---
-            train_data = create_features(working_df)
-            X = train_data[['dayofweek', 'quarter', 'month', 'year', 'dayofyear', 'dayofmonth']]
-            y = train_data['order_qty']
+            # --- 5. MODEL TRAINING ---
+            train_features = create_time_features(working_df)
+            X = train_features[['dayofweek', 'quarter', 'month', 'year', 'dayofyear', 'dayofmonth']]
+            y = train_features['order_qty']
 
-            # Model Initialization
-            if technique == "Random Forest":
-                model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
-            elif technique == "XGBoost":
-                model = XGBRegressor(n_estimators=n_estimators, max_depth=max_depth, learning_rate=0.1)
-            else: # LightGBM
-                model = LGBMRegressor(n_estimators=n_estimators, max_depth=max_depth, learning_rate=0.1)
-
+            model = XGBRegressor(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                learning_rate=learning_rate,
+                random_state=42
+            )
             model.fit(X, y)
 
-            # --- 6. Forecasting Logic ---
+            # --- 6. FORECASTING FUTURE ---
+            # Calculate steps based on interval
             steps = horizon_map[horizon_label]
             if interval == "Weekly": steps = max(1, steps // 7)
             if interval == "Monthly": steps = max(1, steps // 30)
 
             last_date = working_df['Date'].max()
-            future_dates = pd.date_range(start=last_date, periods=steps + 1, freq=resample_map[interval])[1:]
+            future_dates = pd.date_range(start=last_date, periods=steps + 1, freq=res_map[interval])[1:]
             
-            # Create features for future dates
             future_df = pd.DataFrame({'Date': future_dates})
-            future_features = create_features(future_df)[['dayofweek', 'quarter', 'month', 'year', 'dayofyear', 'dayofmonth']]
+            future_X = create_time_features(future_df)[['dayofweek', 'quarter', 'month', 'year', 'dayofyear', 'dayofmonth']]
             
-            # Prediction
-            forecast_values = model.predict(future_features)
-            forecast_values = np.maximum(forecast_values, 0) # Ensure no negative demand
+            # Predict
+            preds = model.predict(future_X)
+            preds = np.maximum(preds, 0) # Remove negative forecasts
 
-            # --- 7. Visualization ---
+            # --- 7. VISUALIZATION ---
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=working_df['Date'], y=working_df['order_qty'], name="Past Actuals", line=dict(color="#2c3e50")))
-            fig.add_trace(go.Scatter(x=future_dates, y=forecast_values, name=f"ML Forecast ({technique})", line=dict(color="#16a085", dash='dash')))
+            # Historical
+            fig.add_trace(go.Scatter(x=working_df['Date'], y=working_df['order_qty'], 
+                                     name="Actual History", line=dict(color="#34495e", width=2)))
+            # Forecast
+            fig.add_trace(go.Scatter(x=future_dates, y=preds, 
+                                     name="XGBoost Forecast", line=dict(color="#e74c3c", width=3, dash='dot')))
             
-            fig.update_layout(title=f"Trend Analysis: {title_suffix} using {technique}", template="plotly_white")
+            fig.update_layout(title=f"Trend Analysis: {title_text}", 
+                              xaxis_title="Date", yaxis_title="Quantity", template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
 
-            # Results Table
-            st.subheader("Forecasted Results")
-            results_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "Predicted Qty": np.round(forecast_values, 2)})
-            st.dataframe(results_df, use_container_width=True)
+            # Display Data Table
+            st.subheader("Forecasted Quantities")
+            forecast_table = pd.DataFrame({
+                "Forecast Date": future_dates.strftime('%d-%m-%Y'),
+                "Predicted Quantity": np.round(preds, 2)
+            })
+            st.dataframe(forecast_table, use_container_width=True)
 
     except Exception as e:
-        st.error(f"An error occurred: {e}")
+        st.error(f"Error: {e}. Please ensure column names match the uploaded images.")
 else:
-    st.info("Please upload your data file to begin the ML forecasting.")
+    st.info("Please upload your historical data file (Image 1 or Image 2 format) to generate an XGBoost forecast.")
