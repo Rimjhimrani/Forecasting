@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from xgboost import XGBRegressor
 
 # --- UI Setup ---
-st.set_page_config(page_title="AI SCM Forecasting", layout="centered")
+st.set_page_config(page_title="Forecasting System", layout="centered")
 
 st.markdown("""
     <style>
@@ -20,66 +19,73 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🚀 AI-Powered Order Forecasting")
+st.title("📦 Order Forecasting System")
+st.info("Strict Mathematical Calculation Mode (Matches Excel Outputs).")
 
 # --- FLOWCHART STEPS 1-3 ---
-st.markdown('<div class="step-header">STEP 1-3: Selection, Interval & Horizon</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-header">STEPS 1-3: Setup Options</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
-    main_option = st.radio("Option", ["Aggregate Wise", "Product Wise"], horizontal=True)
+    main_choice = st.radio("Selection Type", ["Aggregate Wise", "Product Wise"], horizontal=True)
     interval = st.selectbox("Interval", ["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with c2:
-    sub_option = st.radio("Level", ["Model Wise", "Part No Wise"], horizontal=True) if main_option == "Product Wise" else None
+    sub_choice = st.radio("Select Level", ["Model Wise", "Part No Wise"], horizontal=True) if main_choice == "Product Wise" else None
     horizon_label = st.selectbox("Horizon", ["Day", "Week", "Month", "Quarter", "Year", "3 years", "5 years"], index=2)
 
 # --- FLOWCHART STEP 4: CHOOSE TECHNIQUE ---
 st.markdown('<div class="step-header">STEP 4: Choose Forecast Techniques</div>', unsafe_allow_html=True)
 technique = st.selectbox("Technique", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 
+# Technique specific inputs based on your formulas
 tech_params = {}
 if technique == "Weightage Average":
-    w_in = st.text_input("Manual Weights (e.g., 0.2, 0.3, 0.5)", "0.2, 0.3, 0.5")
-    tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
+    w_mode = st.radio("Weight Mode", ["Automated", "Manual entering of weights"], horizontal=True)
+    if w_mode == "Manual entering of weights":
+        w_in = st.text_input("Enter weights (e.g., 0.2, 0.3, 0.5)", "0.2, 0.3, 0.5")
+        tech_params['weights'] = [float(x.strip()) for x in w_in.split(',')]
+    else:
+        tech_params['weights'] = [0.2, 0.3, 0.5]
+
 elif technique == "Moving Average":
     tech_params['n'] = st.number_input("Window Size (n)", 2, 30, 7)
+
 elif technique == "Ramp Up Evenly":
-    tech_params['n'] = [7, 14] # Standard windows for ramp up signal
-    tech_params['factor'] = st.number_input("Ramp up Factor", 1.0, 2.0, 1.05)
+    tech_params['n'] = st.number_input("Window Size for Ramp Up (n)", 2, 30, 7)
+    # The PDF mentioned ramp factor, but your formula strictly uses 'n'. We will obey your formula strictly.
+
 elif technique == "Exponentially":
-    tech_params['alphas'] = [0.2, 0.4, 0.6]
+    tech_params['alpha'] = st.slider("Smoothing Factor (Alpha)", 0.01, 1.0, 0.3)
 
-# --- FEATURE ENGINE (Using your exact formulas) ---
-def generate_features(df, tech, params):
-    df = df.rename(columns={'order_qty': 'demand'})
-    
-    # 1. ALWAYS add Time Features (Month and Day of Week)
-    df['feat_month'] = df['Date'].dt.month
-    df['feat_dow'] = df['Date'].dt.dayofweek
-    df['feat_hour'] = df['Date'].dt.hour
-    
-    # 2. Add technique-specific signal features
-    if tech == "Historical Average":
-        df["feat_signal"] = df["demand"].expanding().mean().shift(1)
-        
-    elif tech == "Moving Average":
-        n = params.get('n', 7)
-        df["feat_signal"] = df["demand"].rolling(window=n, min_periods=1).mean().shift(1)
-        
-    elif tech == "Weightage Average":
-        w = params.get('weights', np.array([0.2, 0.3, 0.5]))
-        df["feat_signal"] = df["demand"].rolling(window=len(w), min_periods=1).apply(
-            lambda x: np.dot(x, w)/np.sum(w) if len(x)==len(w) else np.mean(x), raw=True).shift(1)
-            
-    elif tech == "Ramp Up Evenly":
-        def ramp_calc(s):
-            weights = np.arange(1, len(s) + 1)
-            return np.dot(s, weights) / weights.sum()
-        df["feat_signal"] = df["demand"].rolling(window=7, min_periods=1).apply(ramp_calc, raw=True).shift(1)
-        
-    elif tech == "Exponentially":
-        df["feat_signal"] = df["demand"].ewm(alpha=0.4).mean().shift(1)
+# --- YOUR EXACT FORMULAS ---
+def historical_average(demand):
+    if len(demand) == 0: return 0
+    return sum(demand) / len(demand)
 
-    return df.fillna(method='bfill').fillna(0)
+def weighted_average(demand, weights):
+    n = len(weights)
+    if len(demand) < n: return sum(demand) / len(demand) if demand else 0
+    window = demand[-n:]
+    return sum(d * w for d, w in zip(window, weights)) / sum(weights)
+
+def moving_average(demand, n):
+    if len(demand) == 0: return 0
+    window = demand[-n:]
+    return sum(window) / len(window)
+
+def ramp_up_evenly(demand, n):
+    if len(demand) == 0: return 0
+    window = demand[-n:]
+    actual_n = len(window)
+    weights = list(range(1, actual_n + 1))
+    total_weight = sum(weights)
+    return sum(d * w for d, w in zip(window, weights)) / total_weight
+
+def exponential_smoothing(demand, alpha):
+    if len(demand) == 0: return 0
+    forecast = demand[0]  # initial forecast
+    for d in demand[1:]:
+        forecast = alpha * d + (1 - alpha) * forecast
+    return forecast
 
 # --- STEP 5: UPLOAD DATA ---
 st.markdown('<div class="step-header">STEP 5: Upload the Data File</div>', unsafe_allow_html=True)
@@ -91,69 +97,68 @@ if uploaded_file:
         raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         raw.columns = raw.columns.astype(str).str.strip()
         id_col = raw.columns[0]
+        
         date_cols = [c for c in raw.columns[1:] if pd.notnull(pd.to_datetime(c, errors='coerce', dayfirst=True))]
         df_long = raw.melt(id_vars=[id_col], value_vars=date_cols, var_name='RawDate', value_name='order_qty')
         df_long['Date'] = pd.to_datetime(df_long['RawDate'], dayfirst=True, errors='coerce', format='mixed')
         df_long['order_qty'] = pd.to_numeric(df_long['order_qty'], errors='coerce').fillna(0)
         df_long = df_long.dropna(subset=['Date']).sort_values('Date')
 
-        # Filter
-        if main_option == "Aggregate Wise":
+        # Filter Logic
+        if main_choice == "Aggregate Wise":
             target_df = df_long.groupby('Date')['order_qty'].sum().reset_index()
-            item_name = "Aggregate"
+            item_name = "Aggregate Total"
         else:
-            selected = st.selectbox(f"Select from {id_col}", df_long[id_col].unique())
+            options = df_long[id_col].unique()
+            selected = st.selectbox(f"Select from {id_col}", options)
             target_df = df_long[df_long[id_col] == selected].copy()
             item_name = str(selected)
 
-        # Resample
+        # Resample Frequency
         res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
+        
+        demand_history = target_df['order_qty'].tolist()
 
         # --- STEP 6: GENERATE ---
         st.markdown('<div class="step-header">STEP 6: Generate Forecast and Trend</div>', unsafe_allow_html=True)
         if st.button("🚀 Generate Analysis", use_container_width=True):
-            with st.spinner('AI processing specific technique...'):
-                # 1. Feature Engineering (TECHNIQUE SPECIFIC)
-                df_final = generate_features(target_df, technique, tech_params)
-                
-                # 2. Train XGBoost on these specific features
-                features = ['feat_month', 'feat_dow', 'feat_hour', 'feat_signal']
-                X = df_final[features]
-                y = df_final['demand']
-                
-                model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.05)
-                model.fit(X, y)
-                
-                # 3. Predict Future
+            if len(demand_history) == 0:
+                st.error("No valid historical data found.")
+            else:
+                # 1. Calculate EXACT value using your formulas
+                if technique == "Historical Average":
+                    predicted_value = historical_average(demand_history)
+                elif technique == "Weightage Average":
+                    predicted_value = weighted_average(demand_history, tech_params['weights'])
+                elif technique == "Moving Average":
+                    predicted_value = moving_average(demand_history, tech_params['n'])
+                elif technique == "Ramp Up Evenly":
+                    predicted_value = ramp_up_evenly(demand_history, tech_params['n'])
+                elif technique == "Exponentially":
+                    predicted_value = exponential_smoothing(demand_history, tech_params['alpha'])
+
+                # 2. Setup Future Dates
                 h_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365, "3 years": 1095, "5 years": 1825}
                 last_date = target_df['Date'].max()
                 future_dates = pd.date_range(start=last_date, end=last_date + pd.Timedelta(days=h_map[horizon_label]), freq=res_map[interval])[1:]
                 
-                if len(future_dates) == 0: future_dates = pd.date_range(start=last_date, periods=2, freq=res_map[interval])[1:]
+                if len(future_dates) == 0: 
+                    future_dates = pd.date_range(start=last_date, periods=2, freq=res_map[interval])[1:]
 
-                # Create future features (Dynamic time features + carried signal)
-                f_df = pd.DataFrame({'Date': future_dates})
-                f_df['feat_month'] = f_df['Date'].dt.month
-                f_df['feat_dow'] = f_df['Date'].dt.dayofweek
-                f_df['feat_hour'] = f_df['Date'].dt.hour
-                f_df['feat_signal'] = X['feat_signal'].iloc[-1] # Carry over last signal
-                
-                preds = model.predict(f_df[features])
-                
-                # Post-processing for Ramp Up logic
-                if technique == "Ramp Up Evenly":
-                    f = tech_params.get('factor', 1.05)
-                    preds = [p * (f ** i) for i, p in enumerate(preds, 1)]
+                # Project the exact calculated formula forward
+                preds = [predicted_value] * len(future_dates)
 
-                # 4. Results
+                # 3. Visualization
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['order_qty'], name="History", line=dict(color="#2c3e50")))
-                fig.add_trace(go.Scatter(x=future_dates, y=preds, name=f"AI Forecast ({technique})", line=dict(color="#e67e22", dash='dot')))
-                fig.update_layout(title=f"Trend Analysis: {item_name} via {technique}", template="plotly_white")
+                fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['order_qty'], name="Historical Data", line=dict(color="#2c3e50")))
+                fig.add_trace(go.Scatter(x=future_dates, y=preds, name=f"Forecast ({technique})", line=dict(color="#e67e22", dash='dot')))
+                fig.update_layout(title=f"Trend Analysis: {item_name}", template="plotly_white")
                 st.plotly_chart(fig, use_container_width=True)
                 
-                res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y %H:%M' if interval=="Hourly" else '%d-%m-%Y'), "Predicted Qty": np.round(preds, 1)})
+                # 4. Data Table
+                date_fmt = '%d-%m-%Y %H:%M' if interval == "Hourly" else '%d-%m-%Y'
+                res_df = pd.DataFrame({"Date": future_dates.strftime(date_fmt), "Predicted Qty": np.round(preds, 2)})
                 st.dataframe(res_df, use_container_width=True)
 
     except Exception as e:
