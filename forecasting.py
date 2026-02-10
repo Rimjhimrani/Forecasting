@@ -66,11 +66,11 @@ st.title("📊 AI-Powered Supply Chain Precision Forecast")
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">1</div>Forecasting Scope Selection</div>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 with col1:
-    main_choice = st.radio("Primary Path", ["Aggregate Wise", "Product Wise"], horizontal=True)
+    main_choice = st.radio("Primary Selection Path", ["Aggregate Wise", "Product Wise"], horizontal=True)
 with col2:
     sub_choice = None
     if main_choice == "Product Wise":
-        sub_choice = st.radio("Level", ["Model Wise", "Part No Wise"], horizontal=True)
+        sub_choice = st.radio("Specific Level", ["Model Wise", "Part No Wise"], horizontal=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 3. STEP 2: TIMELINE ---
@@ -79,7 +79,7 @@ col_a, col_b = st.columns(2)
 with col_a:
     interval = st.selectbox("Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with col_b:
-    horizon_label = st.selectbox("Default Horizon (Initial)", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
+    horizon_label = st.selectbox("Default Forecast Horizon (Initial)", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 4. STEP 3: TECHNIQUES ---
@@ -92,7 +92,8 @@ tech_params = {}
 with col_d:
     if technique == "Weightage Average":
         w_in = st.text_input("Manual Weights (comma separated)", "0.2, 0.3, 0.5")
-        tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
+        try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
+        except: tech_params['weights'] = np.array([0.33, 0.33, 0.34])
     elif technique == "Moving Average":
         tech_params['n'] = st.number_input("Lookback window (n)", 2, 30, 7)
     elif technique == "Ramp Up Evenly":
@@ -106,7 +107,7 @@ st.markdown('<div class="step-card"><div class="step-header"><div class="step-nu
 uploaded_file = st.file_uploader("Upload CSV/Excel (Dates as Columns)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 6. CORE LOGIC ---
+# ---  core calculation function ---
 def calculate_excel_baseline(demand, tech, params):
     if len(demand) == 0: return 0
     if tech == "Historical Average": return np.mean(demand)
@@ -153,16 +154,16 @@ if uploaded_file:
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
         st.markdown('<div class="execute-btn">', unsafe_allow_html=True)
-        if st.button("🚀 EXECUTE HYBRID AI FORECAST"):
-            st.session_state.run_forecast = True
+        if st.button("🚀 EXECUTE AI TREND ANALYSIS"):
+            st.session_state.run_analysis = True
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.session_state.get('run_forecast', False):
+        if st.session_state.get('run_analysis', False):
             st.divider()
             
-            # Dynamic Horizon Box
+            # --- DYNAMIC HORIZON BOX (Changeable in Graph Area) ---
             st.markdown('<div class="dynamic-box">', unsafe_allow_html=True)
-            st.write("🔄 **Change Horizon Instantly for the Trend Chart:**")
+            st.write("🔄 **Adjust Horizon Instantly for the Trend Chart:**")
             col_hz1, col_hz2 = st.columns(2)
             with col_hz1:
                 dynamic_val = st.number_input("Enter Quantity", min_value=1, value=15)
@@ -181,7 +182,7 @@ if uploaded_file:
             model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
             model.fit(target_df[['month', 'dow']], target_df['diff'])
             
-            # 3. Future Timeline
+            # 3. Timeline Management
             last_date = target_df['Date'].max()
             last_qty = target_df['qty'].iloc[-1]
             
@@ -194,7 +195,7 @@ if uploaded_file:
             
             future_dates = pd.date_range(start=last_date, end=end_date, freq=res_map[interval])[1:]
             
-            # 4. Predictions for Graph & Table
+            # 4. Final Data Generation
             f_df = pd.DataFrame({'Date': future_dates})
             f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
             ai_residuals = model.predict(f_df[['month', 'dow']])
@@ -207,32 +208,34 @@ if uploaded_file:
                 excel_calc_col.append(round(base, 2))
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
-            # --- TREND GRAPH ---
+            # --- 8. PREMIUM TREND GRAPH ---
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
-            # TRADED (Historical)
+            # TRADED (Historical Blue)
             fig.add_trace(go.Scatter(
                 x=target_df['Date'], y=target_df['qty'], name="Traded",
-                mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'),
+                mode='lines+markers', line=dict(color="#1a8cff", width=2, shape='spline'),
                 marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))
             ))
 
-            # Timeline connection point
+            # Connection Point logic
             f_dates_conn = [last_date] + list(future_dates)
             f_excel_conn = [last_qty] + list(excel_calc_col)
             f_pred_conn = [last_qty] + list(predicted_calc_col)
 
-            # EXCEL CALCULATED FORECAST (Baseline)
+            # EXCEL CALCULATED (Grey Baseline)
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_excel_conn, name="Excel Calculated Forecast",
-                mode='lines', line=dict(color="#999999", width=1.5, dash='dot', shape='spline')
+                mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot', shape='spline'),
+                marker=dict(size=4, color="#999999")
             ))
 
-            # AI PREDICTION (Final)
+            # AI PREDICTED (Gold Final)
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_pred_conn, name="AI Predicted Forecast",
-                mode='lines', line=dict(color="#ffcc00", width=2.5, dash='dash', shape='spline')
+                mode='lines+markers', line=dict(color="#ffcc00", width=2, dash='dash', shape='spline'),
+                marker=dict(size=5, color="white", line=dict(color="#ffcc00", width=1.5))
             ))
 
             # Vertical Line & Icons
@@ -243,7 +246,7 @@ if uploaded_file:
             fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- DATA TABLE & EXCEL DOWNLOAD ---
+            # --- 9. DATA TABLE & EXCEL DOWNLOAD ---
             st.subheader("📋 Forecasted Results Table")
             download_df = pd.DataFrame({
                 "Date": future_dates.strftime('%d-%m-%Y'),
@@ -252,10 +255,17 @@ if uploaded_file:
             })
             st.dataframe(download_df, use_container_width=True, hide_index=True)
 
+            # Generate Downloadable Excel
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                download_df.to_excel(writer, index=False, sheet_name='Forecast_Results')
-            st.download_button(label="📥 Download Forecast Excel", data=output.getvalue(), file_name=f"Forecast_{item_name}.xlsx")
+                download_df.to_excel(writer, index=False, sheet_name='AI_Forecast')
+            
+            st.download_button(
+                label="📥 Download Excel Result (3 Columns)",
+                data=output.getvalue(),
+                file_name=f"Forecast_{item_name}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
     except Exception as e:
         st.error(f"Error: {e}")
