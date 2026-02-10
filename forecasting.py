@@ -11,218 +11,343 @@ st.set_page_config(page_title="AI Precision Forecast", layout="wide", initial_si
 st.markdown("""
 <style>
     /* Global Styles */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
     
     .main { 
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        font-family: 'Inter', sans-serif;
+        background: #0f0f1e;
+        font-family: 'Poppins', sans-serif;
+        padding: 0 !important;
     }
     
     .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
+        padding: 0 3rem 3rem 3rem !important;
+        max-width: 1400px !important;
     }
     
-    /* Header Styling */
-    h1 {
-        color: white !important;
-        font-weight: 700 !important;
+    /* Hero Section */
+    .hero-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 3rem 0;
+        margin: 0 -3rem 3rem -3rem;
         text-align: center;
-        font-size: 3rem !important;
-        margin-bottom: 0.5rem !important;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        border-bottom: 4px solid #a855f7;
     }
     
-    /* Step Card - Glass Morphism Effect */
-    .step-card {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-        padding: 30px;
-        border-radius: 20px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        margin-bottom: 25px;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    
-    .step-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-    }
-    
-    /* Step Header with Gradient */
-    .step-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        font-size: 26px;
-        font-weight: 700;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-    }
-    
-    /* Step Number Badge */
-    .step-number {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    .hero-title {
         color: white;
-        border-radius: 50%;
-        width: 42px;
-        height: 42px;
+        font-size: 3.5rem;
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 2px 4px 8px rgba(0,0,0,0.3);
+        letter-spacing: -1px;
+    }
+    
+    .hero-subtitle {
+        color: rgba(255,255,255,0.95);
+        font-size: 1.3rem;
+        margin-top: 0.5rem;
+        font-weight: 300;
+    }
+    
+    /* Section Dividers */
+    .section-divider {
         display: flex;
+        align-items: center;
+        margin: 3rem 0 2rem 0;
+        position: relative;
+    }
+    
+    .section-number {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
         justify-content: center;
-        align-items: center;
-        margin-right: 15px;
-        font-size: 20px;
+        font-size: 1.5rem;
         font-weight: 700;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        margin-right: 1.5rem;
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+        flex-shrink: 0;
     }
     
-    /* Execute Button - Premium Style */
-    .execute-btn > button {
-        width: 100% !important;
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+    .section-title {
+        color: white;
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin: 0;
+        flex-grow: 1;
+    }
+    
+    .section-line {
+        height: 2px;
+        background: linear-gradient(90deg, rgba(102, 126, 234, 0.3), transparent);
+        flex-grow: 1;
+        margin-left: 1.5rem;
+    }
+    
+    /* Input Groups */
+    .input-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin: 2rem 0;
+    }
+    
+    /* Labels */
+    label {
+        color: #e0e0e0 !important;
+        font-weight: 500 !important;
+        font-size: 0.95rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    /* Select Boxes */
+    .stSelectbox > div > div {
+        background-color: #1a1a2e !important;
+        border: 2px solid #2d2d44 !important;
+        border-radius: 12px !important;
         color: white !important;
-        font-weight: 700 !important;
-        padding: 20px !important;
-        border-radius: 15px !important;
-        border: none !important;
-        font-size: 22px !important;
-        box-shadow: 0 8px 25px rgba(56, 239, 125, 0.3) !important;
         transition: all 0.3s ease !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
     }
     
-    .execute-btn > button:hover {
-        transform: translateY(-3px) !important;
-        box-shadow: 0 12px 35px rgba(56, 239, 125, 0.4) !important;
+    .stSelectbox > div > div:hover {
+        border-color: #667eea !important;
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3) !important;
     }
     
-    /* Dynamic Control Box */
-    .dynamic-box {
-        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-        padding: 25px;
-        border-radius: 15px;
-        border: 2px solid #ff9a76;
-        margin-bottom: 25px;
-        box-shadow: 0 6px 20px rgba(252, 182, 159, 0.3);
+    /* Radio Buttons */
+    .stRadio > div {
+        background-color: #1a1a2e;
+        padding: 1rem;
+        border-radius: 12px;
+        border: 2px solid #2d2d44;
     }
     
-    .dynamic-box-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #d63031;
-        margin-bottom: 15px;
+    .stRadio > div > label {
         display: flex;
-        align-items: center;
+        gap: 1rem;
     }
     
-    /* Input Styling */
-    .stSelectbox, .stRadio, .stNumberInput, .stTextInput {
-        background-color: white;
-        border-radius: 10px;
+    .stRadio label {
+        color: #e0e0e0 !important;
     }
     
-    /* File Uploader Styling */
+    /* Number Input */
+    .stNumberInput > div > div > input {
+        background-color: #1a1a2e !important;
+        border: 2px solid #2d2d44 !important;
+        border-radius: 12px !important;
+        color: white !important;
+        font-weight: 500 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stNumberInput > div > div > input:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3) !important;
+    }
+    
+    /* Text Input */
+    .stTextInput > div > div > input {
+        background-color: #1a1a2e !important;
+        border: 2px solid #2d2d44 !important;
+        border-radius: 12px !important;
+        color: white !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3) !important;
+    }
+    
+    /* Slider */
+    .stSlider > div > div > div {
+        background-color: #2d2d44 !important;
+    }
+    
+    .stSlider > div > div > div > div {
+        background-color: #667eea !important;
+    }
+    
+    /* File Uploader */
     [data-testid="stFileUploader"] {
-        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
-        padding: 30px;
-        border-radius: 15px;
-        border: 2px dashed #667eea;
+        background: linear-gradient(135deg, #1a1a2e 0%, #2d2d44 100%) !important;
+        padding: 2.5rem !important;
+        border-radius: 16px !important;
+        border: 2px dashed #667eea !important;
+        text-align: center !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    [data-testid="stFileUploader"]:hover {
+        border-color: #a855f7 !important;
+        box-shadow: 0 0 30px rgba(168, 85, 247, 0.3) !important;
     }
     
     [data-testid="stFileUploader"] label {
-        font-weight: 600;
-        color: #2d3436;
-        font-size: 16px;
+        color: #e0e0e0 !important;
+        font-size: 1.1rem !important;
     }
     
-    /* DataFrame Styling */
+    [data-testid="stFileUploader"] section {
+        border: none !important;
+    }
+    
+    /* Execute Button */
+    .execute-section {
+        margin: 3rem 0;
+        text-align: center;
+    }
+    
+    .stButton > button {
+        width: 100% !important;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        color: white !important;
+        font-weight: 700 !important;
+        padding: 1.5rem 3rem !important;
+        border-radius: 16px !important;
+        border: none !important;
+        font-size: 1.5rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 2px !important;
+        box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-5px) !important;
+        box-shadow: 0 15px 50px rgba(16, 185, 129, 0.5) !important;
+    }
+    
+    /* Results Section */
+    .results-header {
+        background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+        padding: 2rem;
+        margin: 3rem -3rem 2rem -3rem;
+        text-align: center;
+        border-top: 4px solid #a855f7;
+        border-bottom: 4px solid #ec4899;
+    }
+    
+    .results-title {
+        color: white;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+    }
+    
+    /* Control Panel */
+    .control-panel {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        padding: 2rem;
+        border-radius: 16px;
+        margin: 2rem 0;
+        box-shadow: 0 8px 32px rgba(251, 191, 36, 0.3);
+    }
+    
+    .control-title {
+        color: #78350f;
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+    
+    /* Chart Container */
+    .chart-section {
+        background: #16213e;
+        padding: 2rem;
+        border-radius: 16px;
+        margin: 2rem 0;
+        border: 1px solid #2d2d44;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    
+    .chart-title {
+        color: white;
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Info Box */
+    .stAlert {
+        background-color: #1e3a5f !important;
+        border-left: 4px solid #3b82f6 !important;
+        border-radius: 12px !important;
+        color: #e0e0e0 !important;
+    }
+    
+    /* DataFrame */
     .dataframe {
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        background-color: #1a1a2e !important;
+        border-radius: 12px !important;
+    }
+    
+    [data-testid="stDataFrame"] {
+        background-color: #1a1a2e;
+        border-radius: 12px;
+        padding: 1rem;
     }
     
     /* Download Button */
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important;
+        background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%) !important;
         color: white !important;
         font-weight: 600 !important;
-        border-radius: 10px !important;
-        padding: 12px 24px !important;
+        border-radius: 12px !important;
+        padding: 1rem 2rem !important;
         border: none !important;
-        box-shadow: 0 4px 15px rgba(250, 112, 154, 0.3) !important;
+        font-size: 1.1rem !important;
+        box-shadow: 0 6px 24px rgba(236, 72, 153, 0.4) !important;
         transition: all 0.3s ease !important;
+        width: 100% !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
     }
     
     .stDownloadButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 20px rgba(250, 112, 154, 0.4) !important;
-    }
-    
-    /* Info/Success/Error Boxes */
-    .stAlert {
-        border-radius: 10px;
-        border-left: 5px solid;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 10px 32px rgba(236, 72, 153, 0.5) !important;
     }
     
     /* Divider */
     hr {
-        margin: 2rem 0;
+        margin: 3rem 0;
         border: none;
-        height: 2px;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #667eea, transparent);
     }
     
-    /* Subheader Styling */
-    .stSubheader, h2, h3 {
-        color: white !important;
-        font-weight: 600 !important;
-        text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
-    }
-    
-    /* Chart Container */
-    .chart-container {
-        background: white;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-    
-    /* Metric Cards */
-    [data-testid="stMetricValue"] {
-        font-size: 28px;
-        font-weight: 700;
-    }
-    
-    /* Radio Button Styling */
-    .stRadio > label {
-        font-weight: 600;
-        color: #2d3436;
-    }
-    
-    /* Select Box Styling */
-    .stSelectbox > label {
-        font-weight: 600;
-        color: #2d3436;
-    }
+    /* Hide Streamlit Branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# Animated Title
+# --- HERO SECTION ---
 st.markdown("""
-    <h1>📊 AI-Powered Supply Chain Precision Forecast</h1>
-    <p style='text-align: center; color: white; font-size: 1.2rem; margin-bottom: 2rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);'>
-        Intelligent Demand Forecasting with Machine Learning
-    </p>
+    <div class="hero-section">
+        <div class="hero-title">📊 AI Precision Forecast</div>
+        <div class="hero-subtitle">Intelligent Supply Chain Demand Forecasting with Machine Learning</div>
+    </div>
 """, unsafe_allow_html=True)
 
-# --- 2. STEP 1: SCOPE ---
-st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">1</div>Forecasting Scope Selection</div>', unsafe_allow_html=True)
+# --- SECTION 1: SCOPE ---
+st.markdown("""
+    <div class="section-divider">
+        <div class="section-number">1</div>
+        <div class="section-title">Forecasting Scope Selection</div>
+        <div class="section-line"></div>
+    </div>
+""", unsafe_allow_html=True)
+
 col1, col2 = st.columns(2)
 with col1:
     main_choice = st.radio("🎯 Primary Selection Path", ["Aggregate Wise", "Product Wise"], horizontal=True)
@@ -230,19 +355,31 @@ with col2:
     sub_choice = None
     if main_choice == "Product Wise":
         sub_choice = st.radio("🔍 Specific Level", ["Model Wise", "Part No Wise"], horizontal=True)
-st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 3. STEP 2: TIMELINE ---
-st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">2</div>Timeline Configuration</div>', unsafe_allow_html=True)
+# --- SECTION 2: TIMELINE ---
+st.markdown("""
+    <div class="section-divider">
+        <div class="section-number">2</div>
+        <div class="section-title">Timeline Configuration</div>
+        <div class="section-line"></div>
+    </div>
+""", unsafe_allow_html=True)
+
 col_a, col_b = st.columns(2)
 with col_a:
     interval = st.selectbox("⏱️ Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with col_b:
-    horizon_label = st.selectbox("📅 Default Forecast Horizon (Initial)", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
-st.markdown('</div>', unsafe_allow_html=True)
+    horizon_label = st.selectbox("📅 Default Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 
-# --- 4. STEP 3: TECHNIQUES ---
-st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">3</div>Select Strategy & AI Technique</div>', unsafe_allow_html=True)
+# --- SECTION 3: TECHNIQUES ---
+st.markdown("""
+    <div class="section-divider">
+        <div class="section-number">3</div>
+        <div class="section-title">Select Strategy & AI Technique</div>
+        <div class="section-line"></div>
+    </div>
+""", unsafe_allow_html=True)
+
 col_c, col_d = st.columns(2)
 with col_c:
     technique = st.selectbox("🧮 Excel Strategy (Baseline)", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
@@ -254,17 +391,22 @@ with col_d:
         try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
         except: tech_params['weights'] = np.array([0.33, 0.33, 0.34])
     elif technique == "Moving Average":
-        tech_params['n'] = st.number_input("🔄 Lookback window (n)", 2, 30, 7)
+        tech_params['n'] = st.number_input("🔄 Lookback Window (n)", 2, 30, 7)
     elif technique == "Ramp Up Evenly":
         tech_params['ramp_factor'] = st.number_input("📈 Growth Factor (Multiplier)", 1.0, 2.0, 1.05)
     elif technique == "Exponentially":
         tech_params['alpha'] = st.slider("🎚️ Smoothing Alpha", 0.01, 1.0, 0.3)
-st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. STEP 4: UPLOAD ---
-st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">4</div>Data Ingestion</div>', unsafe_allow_html=True)
+# --- SECTION 4: UPLOAD ---
+st.markdown("""
+    <div class="section-divider">
+        <div class="section-number">4</div>
+        <div class="section-title">Data Ingestion</div>
+        <div class="section-line"></div>
+    </div>
+""", unsafe_allow_html=True)
+
 uploaded_file = st.file_uploader("📁 Upload CSV/Excel (Dates as Columns)", type=['xlsx', 'csv'])
-st.markdown('</div>', unsafe_allow_html=True)
 
 # --- CORE CALCULATION LOGIC ---
 def calculate_excel_baseline(demand, tech, params):
@@ -288,7 +430,7 @@ def calculate_excel_baseline(demand, tech, params):
         return forecast
     return np.mean(demand)
 
-# --- 7. EXECUTION ---
+# --- EXECUTION ---
 if uploaded_file:
     try:
         raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
@@ -312,17 +454,23 @@ if uploaded_file:
         res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
-        st.markdown('<div class="execute-btn">', unsafe_allow_html=True)
+        st.markdown('<div class="execute-section">', unsafe_allow_html=True)
         if st.button("🚀 EXECUTE AI TREND ANALYSIS"):
             st.session_state.run_analysis = True
         st.markdown('</div>', unsafe_allow_html=True)
 
         if st.session_state.get('run_analysis', False):
-            st.divider()
             
-            # --- DYNAMIC HORIZON BOX (Graph Control Area) ---
-            st.markdown('<div class="dynamic-box">', unsafe_allow_html=True)
-            st.markdown('<div class="dynamic-box-title">🔄 Change Horizon Instantly for the Trend Chart</div>', unsafe_allow_html=True)
+            # --- RESULTS HEADER ---
+            st.markdown("""
+                <div class="results-header">
+                    <div class="results-title">⚡ AI Analysis Results</div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # --- CONTROL PANEL ---
+            st.markdown('<div class="control-panel">', unsafe_allow_html=True)
+            st.markdown('<div class="control-title">🔄 Adjust Forecast Horizon Dynamically</div>', unsafe_allow_html=True)
             col_hz1, col_hz2 = st.columns(2)
             with col_hz1:
                 dynamic_val = st.number_input("📊 Enter Quantity", min_value=1, value=15)
@@ -367,9 +515,9 @@ if uploaded_file:
                 excel_calc_col.append(round(base, 2))
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
-            # --- 8. TREND GRAPH (Premium Curvy Style) ---
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
+            # --- TREND GRAPH ---
+            st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+            st.markdown(f'<div class="chart-title">📈 Predictive Trend Analysis: {item_name}</div>', unsafe_allow_html=True)
             fig = go.Figure()
 
             # TRADED
@@ -383,14 +531,14 @@ if uploaded_file:
             f_excel_conn = [last_qty] + list(excel_calc_col)
             f_pred_conn = [last_qty] + list(predicted_calc_col)
 
-            # EXCEL BASELINE (Baseline)
+            # EXCEL BASELINE
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_excel_conn, name="Excel Calculated Forecast",
                 mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot', shape='spline'),
                 marker=dict(size=4, color="#999999")
             ))
 
-            # AI PREDICTION (Final)
+            # AI PREDICTION
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_pred_conn, name="AI Predicted Forecast",
                 mode='lines+markers', line=dict(color="#ffcc00", width=2.5, dash='dash', shape='spline'),
@@ -401,25 +549,38 @@ if uploaded_file:
             fig.add_annotation(x=target_df['Date'].iloc[int(len(target_df)*0.8)], y=target_df['qty'].max()*1.1, text="🛍️", showarrow=False, bgcolor="rgba(26,140,255,0.1)", bordercolor="#1a8cff", borderwidth=1.5, borderpad=6)
             fig.add_annotation(x=future_dates[int(len(future_dates)*0.5)] if len(future_dates)>0 else last_date, y=max(predicted_calc_col)*1.1 if len(predicted_calc_col)>0 else last_qty, text="📢", showarrow=False, bgcolor="rgba(255,204,0,0.1)", bordercolor="#ffcc00", borderwidth=1.5, borderpad=6)
 
-            fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            fig.update_layout(
+                template="plotly_dark", 
+                hovermode="x unified", 
+                height=500, 
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
             st.plotly_chart(fig, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # --- 9. AI WIGGLE CHART (The Seasonal Patterns) ---
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
+            # --- AI WIGGLE CHART ---
+            st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+            st.markdown('<div class="chart-title">📉 AI Pattern Adjustment (The Wiggles)</div>', unsafe_allow_html=True)
             st.info("🎯 This chart shows exactly how much the AI is adding or subtracting from the Excel baseline based on detected patterns.")
             fig_wig = go.Figure(go.Bar(
                 x=future_dates, y=ai_residuals, 
                 name="AI Adjustment", marker_color="#00B0F0"
             ))
-            fig_wig.update_layout(template="plotly_white", height=300, title="Negative/Positive Patterns identified by AI")
+            fig_wig.update_layout(
+                template="plotly_dark", 
+                height=300, 
+                title="Negative/Positive Patterns identified by AI",
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
             st.plotly_chart(fig_wig, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # --- 10. DATA TABLE & DOWNLOAD ---
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.subheader("📋 Forecasted Results Table")
+            # --- DATA TABLE & DOWNLOAD ---
+            st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+            st.markdown('<div class="chart-title">📋 Forecasted Results Table</div>', unsafe_allow_html=True)
             download_df = pd.DataFrame({
                 "Date": future_dates.strftime('%d-%m-%Y'),
                 "Predicted Calculated Forecast": predicted_calc_col,
@@ -430,7 +591,7 @@ if uploaded_file:
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 download_df.to_excel(writer, index=False, sheet_name='AI_Forecast')
-            st.download_button(label="📥 Download Excel Result (3 Columns)", data=output.getvalue(), file_name=f"Forecast_{item_name}.xlsx")
+            st.download_button(label="📥 Download Excel Result", data=output.getvalue(), file_name=f"Forecast_{item_name}.xlsx")
             st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
