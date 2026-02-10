@@ -132,7 +132,7 @@ col_h1, col_h2 = st.columns([1.3, 1])
 with col_h1:
     st.markdown("""
         <div class="hero-text" style="margin-top: 50px;">
-            <h1>DemandIntel<span>.ai</span></h1>
+            <h1 style="font-size: 3rem; font-weight: 800; letter-spacing: -2px; color: #4F46E5;">Agilo<span style="color:#111827;">Forecast</span></h1>'
             <p class="hero-subtitle">High-precision AI supply chain forecasting engine built for modern enterprise demand planning.</p>
         </div>
     """, unsafe_allow_html=True)
