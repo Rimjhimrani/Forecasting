@@ -49,12 +49,12 @@ st.markdown("""
         border: none !important;
         font-size: 18px !important;
     }
-    .trend-control-card {
-        background-color: #e3f2fd;
-        padding: 15px;
+    .dynamic-control-box {
+        background-color: #fff9db;
+        padding: 20px;
         border-radius: 10px;
-        border: 1px solid #90caf9;
-        margin-bottom: 10px;
+        border: 1px solid #fab005;
+        margin-bottom: 15px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -72,7 +72,7 @@ with col2:
         sub_choice = st.radio("Specific Level", ["Model Wise", "Part No Wise"], horizontal=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 2: TIMELINE (HORIZON KEPT HERE) ---
+# --- STEP 2: TIMELINE ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">2</div>Timeline Configuration</div>', unsafe_allow_html=True)
 col_a, col_b = st.columns(2)
 with col_a:
@@ -81,35 +81,34 @@ with col_b:
     horizon_label = st.selectbox("Default Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year", "3 years", "5 years"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 3: TECHNIQUES ---
+# --- STEP 3: TECHNIQUES (EXCEL CALCULATION LOGIC) ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">3</div>AI Strategy & Technique</div>', unsafe_allow_html=True)
 col_c, col_d = st.columns(2)
 with col_c:
-    technique = st.selectbox("Select Statistical Strategy", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
+    technique = st.selectbox("AI Strategy (Excel Baseline)", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 
 tech_params = {}
 with col_d:
     if technique == "Weightage Average":
-        w_mode = st.radio("Weight Mode", ["Automated", "Manual"], horizontal=True)
-        if w_mode == "Manual":
-            w_in = st.text_input("Enter weights (comma separated)", "0.2, 0.3, 0.5")
-            try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
-            except: st.error("Invalid weight format")
+        w_mode = st.radio("Weight Selection", ["Automated (Even)", "Manual Entry"], horizontal=True)
+        if w_mode == "Manual Entry":
+            w_in = st.text_input("Enter weights (e.g. 0.2, 0.3, 0.5)", "0.2, 0.3, 0.5")
+            tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
         else: tech_params['weights'] = np.array([0.33, 0.33, 0.34])
     elif technique == "Moving Average":
         tech_params['n'] = st.number_input("Lookback window (n)", 2, 30, 7)
     elif technique == "Ramp Up Evenly":
-        tech_params['ramp_factor'] = st.number_input("Growth Factor", 1.0, 2.0, 1.05)
+        tech_params['ramp_factor'] = st.number_input("Manual Ramp Up Factor (Growth)", 1.0, 2.0, 1.05, 0.01)
     elif technique == "Exponentially":
         tech_params['alpha'] = st.slider("Smoothing Alpha", 0.01, 1.0, 0.3)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 4: UPLOAD ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">4</div>Data Ingestion</div>', unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Upload CSV or Excel", type=['xlsx', 'csv'])
+uploaded_file = st.file_uploader("Upload Wide-Format Excel/CSV (Dates as Columns)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- LOGIC ---
+# --- BASELINE CALCULATION LOGIC (RE-ADDED) ---
 def calculate_excel_baseline(demand, tech, params):
     if len(demand) == 0: return 0
     if tech == "Historical Average": return np.mean(demand)
@@ -121,7 +120,7 @@ def calculate_excel_baseline(demand, tech, params):
         n = len(w)
         return np.dot(demand[-n:], w) / np.sum(w) if len(demand) >= n else np.mean(demand)
     elif tech == "Ramp Up Evenly":
-        d_slice = demand[-7:] if len(demand) >= 7 else demand
+        d_slice = demand[-7:] 
         weights = np.arange(1, len(d_slice) + 1)
         return np.dot(d_slice, weights) / weights.sum()
     elif tech == "Exponentially":
@@ -131,6 +130,7 @@ def calculate_excel_baseline(demand, tech, params):
         return forecast
     return np.mean(demand)
 
+# --- EXECUTION ---
 if uploaded_file:
     try:
         raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
@@ -156,67 +156,75 @@ if uploaded_file:
 
         st.markdown('<div class="execute-btn">', unsafe_allow_html=True)
         if st.button("🚀 EXECUTE HYBRID AI FORECAST"):
-            st.session_state.execute_clicked = True
+            st.session_state.run_forecast = True
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.session_state.get('execute_clicked', False):
+        if st.session_state.get('run_forecast', False):
             st.divider()
             
-            # --- TREND CHART CONTROLS (THE DROP BOX YOU ASKED FOR) ---
-            st.markdown('<div class="trend-control-card">', unsafe_allow_html=True)
-            st.write("🔄 **Change Forecast View Instantly:**")
+            # --- DYNAMIC HORIZON DROP BOX (WITH TREND CHART) ---
+            st.markdown('<div class="dynamic-control-box">', unsafe_allow_html=True)
+            st.write("📊 **Adjust Forecast Trend Instantly:**")
             col_z1, col_z2 = st.columns(2)
             with col_z1:
-                dynamic_h_val = st.number_input("How many units?", min_value=1, value=30)
+                dynamic_val = st.number_input("Enter Quantity", min_value=1, value=15)
             with col_z2:
-                dynamic_h_unit = st.selectbox("Unit", ["Days", "Weeks", "Months", "Years", "Original Selection"])
+                dynamic_unit = st.selectbox("Select Unit", ["Days", "Weeks", "Months", "Years", "Use Default Step 2"])
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # Calculation
-            history = target_df['qty'].tolist()
-            excel_base = calculate_excel_baseline(history, technique, tech_params)
-            
-            # AI logic
-            target_df['month'] = target_df['Date'].dt.month
-            target_df['dow'] = target_df['Date'].dt.dayofweek
-            target_df['diff'] = target_df['qty'] - excel_base
-            model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
-            model.fit(target_df[['month', 'dow']], target_df['diff'])
-            
-            last_date = target_df['Date'].max()
-            
-            # Determine which horizon to use
-            if dynamic_h_unit == "Original Selection":
-                h_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365, "3 years": 1095, "5 years": 1825}
-                end_date = last_date + pd.Timedelta(days=h_map[horizon_label])
-            elif dynamic_h_unit == "Days": end_date = last_date + pd.Timedelta(days=dynamic_h_val)
-            elif dynamic_h_unit == "Weeks": end_date = last_date + pd.Timedelta(weeks=dynamic_h_val)
-            elif dynamic_h_unit == "Months": end_date = last_date + pd.DateOffset(months=dynamic_h_val)
-            elif dynamic_h_unit == "Years": end_date = last_date + pd.DateOffset(years=dynamic_h_val)
+            with st.spinner('Applying Excel Calculation + AI logic...'):
+                history = target_df['qty'].tolist()
+                
+                # 1. Run Excel Baseline Calculation
+                excel_base = calculate_excel_baseline(history, technique, tech_params)
+                
+                # 2. Train AI (XGBoost)
+                target_df['month'] = target_df['Date'].dt.month
+                target_df['dow'] = target_df['Date'].dt.dayofweek
+                target_df['diff'] = target_df['qty'] - excel_base
+                
+                model = XGBRegressor(n_estimators=150, max_depth=5, learning_rate=0.05, random_state=42)
+                model.fit(target_df[['month', 'dow']], target_df['diff'])
+                
+                # 3. Dynamic Horizon logic
+                last_date = target_df['Date'].max()
+                if dynamic_unit == "Use Default Step 2":
+                    h_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365, "3 years": 1095, "5 years": 1825}
+                    end_date = last_date + pd.Timedelta(days=h_map[horizon_label])
+                elif dynamic_unit == "Days": end_date = last_date + pd.Timedelta(days=dynamic_val)
+                elif dynamic_unit == "Weeks": end_date = last_date + pd.Timedelta(weeks=dynamic_val)
+                elif dynamic_unit == "Months": end_date = last_date + pd.DateOffset(months=dynamic_val)
+                elif dynamic_unit == "Years": end_date = last_date + pd.DateOffset(years=dynamic_val)
 
-            future_dates = pd.date_range(start=last_date, end=end_date, freq=res_map[interval])[1:]
-            
-            # Safety for empty range
-            if len(future_dates) == 0:
-                future_dates = pd.date_range(start=last_date, periods=dynamic_h_val+1, freq=res_map[interval])[1:]
+                future_dates = pd.date_range(start=last_date, end=end_date, freq=res_map[interval])[1:]
+                
+                # Predict Future
+                f_df = pd.DataFrame({'Date': future_dates})
+                f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
+                ai_wiggles = model.predict(f_df[['month', 'dow']])
+                
+                # 4. Final Prediction (Baseline + AI)
+                final_preds = np.maximum(excel_base + ai_wiggles, 0)
+                
+                if technique == "Ramp Up Evenly":
+                    final_preds = [p * (tech_params.get('ramp_factor', 1.05) ** i) for i, p in enumerate(final_preds, 1)]
 
-            f_df = pd.DataFrame({'Date': future_dates})
-            f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
-            ai_wiggles = model.predict(f_df[['month', 'dow']])
-            final_preds = np.maximum(excel_base + ai_wiggles, 0)
+                # Visualization
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['qty'], name="History", line=dict(color="#1e3d59")))
+                fig.add_trace(go.Scatter(x=future_dates, y=final_preds, name="AI Forecast", line=dict(color="#FF8C00", dash='dot', width=3)))
+                fig.update_layout(title=f"Predictive Trend Analysis: {item_name}", template="plotly_white", hovermode="x unified")
+                st.plotly_chart(fig, use_container_width=True)
 
-            # Plot
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['qty'], name="History", line=dict(color="#1e3d59")))
-            fig.add_trace(go.Scatter(x=future_dates, y=final_preds, name="AI Forecast", line=dict(color="#FF8C00", dash='dot', width=3)))
-            fig.update_layout(title=f"Trend Projection for {item_name}", template="plotly_white", hovermode="x unified")
-            st.plotly_chart(fig, use_container_width=True)
+                # Metrics and Results
+                c1, c2 = st.columns(2)
+                with c1: st.info(f"**Calculated Excel Baseline:** {round(excel_base, 2)}")
+                with c2: st.success(f"**AI Strategy Applied:** {technique}")
 
-            # Table
-            st.subheader("📋 Forecasted Timeline")
-            date_fmt = '%d-%m-%Y %H:%M' if interval=="Hourly" else '%d-%m-%Y'
-            res_df = pd.DataFrame({"Date": future_dates.strftime(date_fmt), "Forecast Qty": np.round(final_preds, 2)})
-            st.dataframe(res_df, use_container_width=True, hide_index=True)
+                st.subheader("📋 Predicted Data Results")
+                date_fmt = '%d-%m-%Y %H:%M' if interval=="Hourly" else '%d-%m-%Y'
+                res_df = pd.DataFrame({"Date": future_dates.strftime(date_fmt), "Forecast Qty": np.round(final_preds, 2)})
+                st.dataframe(res_df, use_container_width=True, hide_index=True)
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error in process: {e}")
