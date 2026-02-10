@@ -5,131 +5,157 @@ import plotly.graph_objects as go
 from xgboost import XGBRegressor
 import io
 
-# --- 1. ENTERPRISE UI CONFIG ---
-st.set_page_config(page_title="AI Supply Chain Precision", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. PREMIUM ENTERPRISE UI CONFIG ---
+st.set_page_config(page_title="AI Supply Chain | Precision", layout="wide", initial_sidebar_state="collapsed")
 
+# Custom CSS for a "SaaS Product" look
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-    /* Global Typography & Background */
+    /* Global Typography */
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
         background-color: #FFFFFF;
+        color: #111827;
     }
 
-    .stApp {
+    /* Remove Streamlit header/footer for a clean look */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* Main Content Centering */
+    .block-container {
+        padding-top: 5rem;
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    /* Vertical Flow Design */
+    .step-wrapper {
+        position: relative;
+        padding-left: 40px;
+        margin-bottom: 50px;
+        border-left: 2px solid #E5E7EB;
+    }
+
+    .step-dot {
+        position: absolute;
+        left: -9px;
+        top: 0;
+        width: 16px;
+        height: 16px;
         background-color: #FFFFFF;
+        border: 2px solid #4F46E5;
+        border-radius: 50%;
     }
 
-    /* Minimalist Step Headers */
-    .step-badge {
-        font-size: 0.7rem;
+    .step-label {
+        color: #4F46E5;
+        font-size: 0.75rem;
         font-weight: 700;
-        color: #6366F1;
         text-transform: uppercase;
-        letter-spacing: 1.2px;
-        margin-bottom: 5px;
-        display: block;
+        letter-spacing: 0.1em;
+        margin-bottom: 4px;
     }
 
-    .step-title {
-        font-size: 1.6rem;
+    .step-heading {
+        font-size: 1.5rem;
         font-weight: 700;
         color: #111827;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
     }
 
-    /* Vertical Flow Container */
-    .vertical-step {
-        max-width: 850px;
-        margin: 0 auto;
-        padding: 40px 0;
-        border-bottom: 1px solid #F3F4F6;
+    /* Input Styling */
+    .stSelectbox, .stRadio, .stNumberInput, .stTextInput {
+        background-color: #F9FAFB;
+        border-radius: 8px;
     }
 
-    /* Large Execute Button */
+    /* Premium Button */
     div.stButton > button {
-        width: 100% !important;
-        max-width: 850px;
-        display: block;
-        margin: 40px auto !important;
+        width: 100%;
         background-color: #111827 !important;
-        color: white !important;
-        padding: 20px !important;
-        font-size: 1.2rem !important;
-        font-weight: 600 !important;
-        border-radius: 12px !important;
+        color: #FFFFFF !important;
         border: none !important;
-        transition: all 0.3s ease;
+        padding: 18px !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease;
     }
 
     div.stButton > button:hover {
-        background-color: #6366F1 !important;
+        background-color: #4F46E5 !important;
         transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     }
 
-    /* Dynamic Horizon Box */
-    .adjustment-box {
-        background-color: #F9FAFB;
-        padding: 25px;
-        border-radius: 15px;
-        border: 1px solid #E5E7EB;
-        margin-bottom: 30px;
+    /* Result Insights Card */
+    .insight-card {
+        background-color: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        padding: 30px;
+        border-radius: 20px;
+        margin-top: 40px;
     }
 
 </style>
 """, unsafe_allow_html=True)
 
 # --- HEADER ---
-st.markdown('<div style="text-align: center; padding: 60px 0 20px 0;">'
-            '<h1 style="font-size: 3rem; font-weight: 800; color: #111827; letter-spacing: -1.5px;">Precision Forecast<span style="color:#6366F1;">.ai</span></h1>'
-            '<p style="color: #6B7280; font-size: 1.2rem;">Enterprise-grade demand intelligence and supply chain optimization.</p>'
+st.markdown('<div style="text-align: center; margin-bottom: 80px;">'
+            '<h1 style="font-size: 3rem; font-weight: 800; letter-spacing: -2px; color: #111827;">DemandIntel<span style="color:#4F46E5;">.ai</span></h1>'
+            '<p style="color: #6B7280; font-size: 1.2rem;">Next-generation Demand Forecasting & Supply Chain Optimization</p>'
             '</div>', unsafe_allow_html=True)
 
-# --- VERTICAL STEPS ---
-
-# STEP 1
-st.markdown('<div class="vertical-step"><span class="step-badge">Phase 01</span><div class="step-title">Forecasting Scope</div>', unsafe_allow_html=True)
+# --- STEP 1 ---
+st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
+            '<div class="step-label">Step 01</div><div class="step-heading">Forecasting Scope</div>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 with col1:
-    main_choice = st.radio("Primary Selection Path", ["Aggregate Wise", "Product Wise"], horizontal=True)
+    main_choice = st.radio("Selection Path", ["Aggregate Wise", "Product Wise"], horizontal=True)
 with col2:
     if main_choice == "Product Wise":
         sub_choice = st.radio("Resolution Level", ["Model Wise", "Part No Wise"], horizontal=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# STEP 2
-st.markdown('<div class="vertical-step"><span class="step-badge">Phase 02</span><div class="step-title">Timeline Configuration</div>', unsafe_allow_html=True)
+# --- STEP 2 ---
+st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
+            '<div class="step-label">Step 02</div><div class="step-heading">Temporal Parameters</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
-    interval = st.selectbox("Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
+    interval = st.selectbox("Frequency", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with c2:
-    horizon_label = st.selectbox("Default Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
+    horizon_label = st.selectbox("Standard Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# STEP 3
-st.markdown('<div class="vertical-step"><span class="step-badge">Phase 03</span><div class="step-title">Strategy & AI Technique</div>', unsafe_allow_html=True)
+# --- STEP 3 ---
+st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
+            '<div class="step-label">Step 03</div><div class="step-heading">Modeling Strategy</div>', unsafe_allow_html=True)
 c3, c4 = st.columns(2)
 with c3:
     technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 with c4:
     tech_params = {}
     if technique == "Weightage Average":
-        w_in = st.text_input("Manual Weights (comma separated)", "0.3, 0.7")
+        w_in = st.text_input("Manual Weight Ratios", "0.3, 0.7")
         try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
         except: tech_params['weights'] = np.array([0.5, 0.5])
     elif technique == "Moving Average":
-        tech_params['n'] = st.number_input("Lookback window (n)", 2, 30, 7)
+        tech_params['n'] = st.number_input("Lookback Window", 2, 30, 7)
     elif technique == "Ramp Up Evenly":
-        tech_params['ramp_factor'] = st.number_input("Growth Factor", 1.0, 2.0, 1.05)
+        tech_params['ramp_factor'] = st.number_input("Growth Coefficient", 1.0, 2.0, 1.05)
     elif technique == "Exponentially":
         tech_params['alpha'] = st.slider("Smoothing Alpha", 0.01, 1.0, 0.3)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# STEP 4
-st.markdown('<div class="vertical-step"><span class="step-badge">Phase 04</span><div class="step-title">Data Ingestion</div>', unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Upload CSV or Excel (Horizontal Format)", type=['xlsx', 'csv'])
+# --- STEP 4 ---
+st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
+            '<div class="step-label">Step 04</div><div class="step-heading">Data Ingestion</div>', unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Drop Enterprise Data (CSV or Excel)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- CORE LOGIC ---
@@ -140,7 +166,7 @@ def calculate_excel_baseline(demand, tech, params):
         n = params.get('n', 7)
         return np.mean(demand[-n:]) if len(demand) >= n else np.mean(demand)
     elif tech == "Weightage Average":
-        w = params.get('weights', np.array([0.5, 0.5]))
+        w = params.get('weights', np.array([0.33, 0.33, 0.34]))
         n = len(w)
         return np.dot(demand[-n:], w) / np.sum(w) if len(demand) >= n else np.mean(demand)
     elif tech == "Ramp Up Evenly":
@@ -169,36 +195,33 @@ if uploaded_file:
 
         if main_choice == "Aggregate Wise":
             target_df = df_long.groupby('Date')['qty'].sum().reset_index()
-            item_name = "System Aggregate"
+            item_name = "System-wide Aggregate"
         else:
-            st.markdown('<div style="max-width:850px; margin: 0 auto;">', unsafe_allow_html=True)
-            selected = st.selectbox("🎯 Target Identification", df_long[id_col].unique())
+            selected = st.selectbox("🎯 Identity Analysis Target", df_long[id_col].unique())
             target_df = df_long[df_long[id_col] == selected].copy()
             item_name = str(selected)
-            st.markdown('</div>', unsafe_allow_html=True)
 
         res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
-        if st.button("🚀 EXECUTE AI TREND ANALYSIS"):
+        if st.button("RUN PREDICTIVE ANALYSIS"):
             st.session_state.run_analysis = True
 
         if st.session_state.get('run_analysis', False):
-            # --- RESULTS SECTION ---
-            st.markdown('<div style="max-width:1000px; margin: 40px auto;">', unsafe_allow_html=True)
+            st.markdown('<div class="insight-card">', unsafe_allow_html=True)
             
-            # Adjustment viewport
-            st.markdown('<div class="adjustment-box"><b>🛠 Operational Viewport Adjustment</b>', unsafe_allow_html=True)
-            ax1, ax2 = st.columns(2)
-            with ax1: dynamic_val = st.number_input("Lookahead Length", min_value=1, value=15)
-            with ax2: dynamic_unit = st.selectbox("Time Metric", ["Days", "Weeks", "Months", "Original Selection"])
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            # Core Modeling
+            # --- CUSTOMER ADJUSTMENT PANEL ---
+            st.markdown("### 🛠 Operational Viewport")
+            cx1, cx2 = st.columns(2)
+            with cx1: dynamic_val = st.number_input("Forecast Length", min_value=1, value=15)
+            with cx2: dynamic_unit = st.selectbox("View Period", ["Days", "Weeks", "Months", "Original Selection"])
+            
+            # Calculations
             history = target_df['qty'].tolist()
             excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
             target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
             target_df['diff'] = target_df['qty'] - excel_base_scalar
+            
             model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
             model.fit(target_df[['month', 'dow']], target_df['diff'])
             
@@ -221,11 +244,11 @@ if uploaded_file:
                 excel_calc_col.append(round(base, 2))
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
-            # --- PRECISE GRAPH CODE AS REQUESTED ---
+            # --- 8. TREND GRAPH (Curvy Premium Style) ---
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
-            # TRADED
+            # Historical "Traded"
             fig.add_trace(go.Scatter(
                 x=target_df['Date'], y=target_df['qty'], name="Traded",
                 mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'),
@@ -236,28 +259,41 @@ if uploaded_file:
             f_excel_conn = [last_qty] + list(excel_calc_col)
             f_pred_conn = [last_qty] + list(predicted_calc_col)
 
-            # EXCEL BASELINE
+            # Excel Baseline
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_excel_conn, name="Excel Calculated Forecast",
                 mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot', shape='spline'),
                 marker=dict(size=4, color="#999999")
             ))
 
-            # AI PREDICTION
+            # AI Prediction
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_pred_conn, name="AI Predicted Forecast",
                 mode='lines+markers', line=dict(color="#ffcc00", width=2.5, dash='dash', shape='spline'),
                 marker=dict(size=5, color="white", line=dict(color="#ffcc00", width=1.5))
             ))
 
+            # Vertical split and annotations
             fig.add_vline(x=last_date, line_width=1.5, line_color="#cccccc")
-            fig.add_annotation(x=target_df['Date'].iloc[int(len(target_df)*0.8)], y=target_df['qty'].max()*1.1, text="🛍️", showarrow=False, bgcolor="rgba(26,140,255,0.1)", bordercolor="#1a8cff", borderwidth=1.5, borderpad=6)
-            fig.add_annotation(x=future_dates[int(len(future_dates)*0.5)] if len(future_dates)>0 else last_date, y=max(predicted_calc_col)*1.1 if len(predicted_calc_col)>0 else last_qty, text="📢", showarrow=False, bgcolor="rgba(255,204,0,0.1)", bordercolor="#ffcc00", borderwidth=1.5, borderpad=6)
+            
+            # Historical Marker Annotation
+            if len(target_df) > 0:
+                fig.add_annotation(x=target_df['Date'].iloc[int(len(target_df)*0.8)], 
+                                 y=target_df['qty'].max()*1.1, text="🛍️", showarrow=False, 
+                                 bgcolor="rgba(26,140,255,0.1)", bordercolor="#1a8cff", borderwidth=1.5, borderpad=6)
+            
+            # Forecast Marker Annotation
+            if len(future_dates) > 0:
+                fig.add_annotation(x=future_dates[int(len(future_dates)*0.5)], 
+                                 y=max(predicted_calc_col)*1.1 if len(predicted_calc_col)>0 else last_qty, 
+                                 text="📢", showarrow=False, bgcolor="rgba(255,204,0,0.1)", 
+                                 bordercolor="#ffcc00", borderwidth=1.5, borderpad=6)
 
-            fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            fig.update_layout(template="plotly_white", hovermode="x unified", height=500, 
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- AI WIGGLE CHART ---
+            # --- 9. AI WIGGLE CHART (The Seasonal Patterns) ---
             st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
             st.info("This chart shows exactly how much the AI is adding or subtracting from the Excel baseline based on detected patterns.")
             fig_wig = go.Figure(go.Bar(
@@ -267,15 +303,15 @@ if uploaded_file:
             fig_wig.update_layout(template="plotly_white", height=300, title="Negative/Positive Patterns identified by AI")
             st.plotly_chart(fig_wig, use_container_width=True)
 
-            # --- TABLE ---
-            st.subheader("📋 Forecast Output Table")
+            # DATA TABLE
+            st.markdown("#### Demand Schedule")
             res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Forecast": predicted_calc_col, "Statistical Baseline": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 res_df.to_excel(writer, index=False)
-            st.download_button("📥 DOWNLOAD REPORT", output.getvalue(), f"Forecast_{item_name}.xlsx")
+            st.download_button("📥 EXPORT INTELLIGENCE REPORT", output.getvalue(), f"AI_Report_{item_name}.xlsx")
             st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
