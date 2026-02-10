@@ -106,7 +106,7 @@ st.markdown('<div class="step-card"><div class="step-header"><div class="step-nu
 uploaded_file = st.file_uploader("Upload CSV/Excel (Dates as Columns)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 6. CORE LOGIC FUNCTIONS ---
+# --- 6. CORE LOGIC ---
 def calculate_excel_baseline(demand, tech, params):
     if len(demand) == 0: return 0
     if tech == "Historical Average": return np.mean(demand)
@@ -145,7 +145,7 @@ if uploaded_file:
             target_df = df_long.groupby('Date')['qty'].sum().reset_index()
             item_name = "Aggregate Sum"
         else:
-            selected = st.selectbox(f"Select Target", df_long[id_col].unique())
+            selected = st.selectbox(f"Select Target Item", df_long[id_col].unique())
             target_df = df_long[df_long[id_col] == selected].copy()
             item_name = str(selected)
 
@@ -153,16 +153,16 @@ if uploaded_file:
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
         st.markdown('<div class="execute-btn">', unsafe_allow_html=True)
-        if st.button("🚀 EXECUTE AI TREND ANALYSIS"):
-            st.session_state.run_analysis = True
+        if st.button("🚀 EXECUTE HYBRID AI FORECAST"):
+            st.session_state.run_forecast = True
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.session_state.get('run_analysis', False):
+        if st.session_state.get('run_forecast', False):
             st.divider()
             
-            # --- DYNAMIC HORIZON BOX ---
+            # Dynamic Horizon Box
             st.markdown('<div class="dynamic-box">', unsafe_allow_html=True)
-            st.write("🔄 **Adjust Horizon Instantly for the Trend Chart:**")
+            st.write("🔄 **Change Horizon Instantly for the Trend Chart:**")
             col_hz1, col_hz2 = st.columns(2)
             with col_hz1:
                 dynamic_val = st.number_input("Enter Quantity", min_value=1, value=15)
@@ -170,17 +170,18 @@ if uploaded_file:
                 dynamic_unit = st.selectbox("Select Unit", ["Days", "Weeks", "Months", "Original Selection"])
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # Calculation
+            # 1. Calculation Logic
             history = target_df['qty'].tolist()
             excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
             
-            # AI Model
+            # 2. AI Adjustment
             target_df['month'] = target_df['Date'].dt.month
             target_df['dow'] = target_df['Date'].dt.dayofweek
             target_df['diff'] = target_df['qty'] - excel_base_scalar
             model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
             model.fit(target_df[['month', 'dow']], target_df['diff'])
             
+            # 3. Future Timeline
             last_date = target_df['Date'].max()
             last_qty = target_df['qty'].iloc[-1]
             
@@ -193,7 +194,7 @@ if uploaded_file:
             
             future_dates = pd.date_range(start=last_date, end=end_date, freq=res_map[interval])[1:]
             
-            # Predictions
+            # 4. Predictions for Graph & Table
             f_df = pd.DataFrame({'Date': future_dates})
             f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
             ai_residuals = model.predict(f_df[['month', 'dow']])
@@ -206,53 +207,44 @@ if uploaded_file:
                 excel_calc_col.append(round(base, 2))
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
-            # --- TREND GRAPH (FIXED ANNOTATIONS) ---
+            # --- TREND GRAPH ---
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
-            # Traded Line
+            # TRADED (Historical)
             fig.add_trace(go.Scatter(
                 x=target_df['Date'], y=target_df['qty'], name="Traded",
-                mode='lines+markers', line=dict(color="#1a8cff", width=4, shape='spline'),
-                marker=dict(size=8, color="white", line=dict(color="#1a8cff", width=2))
+                mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'),
+                marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))
             ))
 
-            # Prediction Line
+            # Timeline connection point
             f_dates_conn = [last_date] + list(future_dates)
-            f_preds_conn = [last_qty] + list(predicted_calc_col)
+            f_excel_conn = [last_qty] + list(excel_calc_col)
+            f_pred_conn = [last_qty] + list(predicted_calc_col)
+
+            # EXCEL CALCULATED FORECAST (Baseline)
             fig.add_trace(go.Scatter(
-                x=f_dates_conn, y=f_preds_conn, name="Prediction",
-                mode='lines', line=dict(color="#ffcc00", width=4, dash='dash', shape='spline')
+                x=f_dates_conn, y=f_excel_conn, name="Excel Calculated Forecast",
+                mode='lines', line=dict(color="#999999", width=1.5, dash='dot', shape='spline')
             ))
 
-            # Vertical Line
-            fig.add_vline(x=last_date, line_width=2, line_dash="solid", line_color="#cccccc")
+            # AI PREDICTION (Final)
+            fig.add_trace(go.Scatter(
+                x=f_dates_conn, y=f_pred_conn, name="AI Predicted Forecast",
+                mode='lines', line=dict(color="#ffcc00", width=2.5, dash='dash', shape='spline')
+            ))
 
-            # Icons (Fixed properties)
-            fig.add_annotation(
-                x=target_df['Date'].iloc[int(len(target_df)*0.8)], 
-                y=target_df['qty'].max()*1.1, 
-                text="🛍️", showarrow=False, 
-                bgcolor="rgba(26,140,255,0.1)", 
-                bordercolor="#1a8cff", 
-                borderwidth=2,
-                borderpad=8
-            )
-            fig.add_annotation(
-                x=future_dates[int(len(future_dates)*0.5)] if len(future_dates)>0 else last_date, 
-                y=max(predicted_calc_col)*1.1 if len(predicted_calc_col)>0 else last_qty, 
-                text="📢", showarrow=False, 
-                bgcolor="rgba(255,204,0,0.1)", 
-                bordercolor="#ffcc00", 
-                borderwidth=2,
-                borderpad=8
-            )
+            # Vertical Line & Icons
+            fig.add_vline(x=last_date, line_width=1.5, line_color="#cccccc")
+            fig.add_annotation(x=target_df['Date'].iloc[int(len(target_df)*0.8)], y=target_df['qty'].max()*1.1, text="🛍️", showarrow=False, bgcolor="rgba(26,140,255,0.1)", bordercolor="#1a8cff", borderwidth=1.5, borderpad=6)
+            fig.add_annotation(x=future_dates[int(len(future_dates)*0.5)] if len(future_dates)>0 else last_date, y=max(predicted_calc_col)*1.1 if len(predicted_calc_col)>0 else last_qty, text="📢", showarrow=False, bgcolor="rgba(255,204,0,0.1)", bordercolor="#ffcc00", borderwidth=1.5, borderpad=6)
 
-            fig.update_layout(template="plotly_white", hovermode="x unified", height=500)
+            fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- TABLES & DOWNLOAD ---
-            st.subheader("📋 Forecast Data Results")
+            # --- DATA TABLE & EXCEL DOWNLOAD ---
+            st.subheader("📋 Forecasted Results Table")
             download_df = pd.DataFrame({
                 "Date": future_dates.strftime('%d-%m-%Y'),
                 "Predicted Calculated Forecast": predicted_calc_col,
@@ -262,8 +254,8 @@ if uploaded_file:
 
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                download_df.to_excel(writer, index=False, sheet_name='Forecast')
-            st.download_button(label="📥 Download Excel Result", data=output.getvalue(), file_name=f"Forecast_{item_name}.xlsx")
+                download_df.to_excel(writer, index=False, sheet_name='Forecast_Results')
+            st.download_button(label="📥 Download Forecast Excel", data=output.getvalue(), file_name=f"Forecast_{item_name}.xlsx")
 
     except Exception as e:
         st.error(f"Error: {e}")
