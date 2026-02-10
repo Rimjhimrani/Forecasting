@@ -115,9 +115,9 @@ with col_h1:
                 'The world\'s most precise AI-driven supply chain forecasting engine for modern enterprises.</p>'
                 '</div>', unsafe_allow_html=True)
 with col_h2:
-    # IMPORTANT: Replace 'forecast_image.png' with your actual image file path
+    # IMPORTANT: Replace 'Futuristic order for.png' with your actual image file path
     try:
-        st.image("forecast_image.png", use_column_width=True) 
+        st.image("Futuristic order for.png", use_column_width=True) 
     except:
         # Placeholder if image file not found locally
         st.markdown('<div style="background: linear-gradient(135deg, #E0F7FA 0%, #80DEEA 100%); width: 100%; height: 300px; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: #00838F; font-weight: bold; text-align: center; padding: 20px;">[ Place "Order Forecast" Image Here ]</div>', unsafe_allow_html=True)
