@@ -139,7 +139,7 @@ with col_h1:
 
 with col_h2:
     # Adding the provided teal forecast image
-    st.image("https://i.imgur.com/rNnBv2Q.png", use_column_width=True)
+    st.image("forecast_image.png", use_column_width=True)
 
 st.markdown("<br><br>", unsafe_allow_html=True)
 
