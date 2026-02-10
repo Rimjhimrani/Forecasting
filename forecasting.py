@@ -4,11 +4,12 @@ import numpy as np
 import plotly.graph_objects as go
 from xgboost import XGBRegressor
 import io
+import base64
 
 # --- 1. PREMIUM ENTERPRISE UI CONFIG ---
-st.set_page_config(page_title="AI Supply Chain | Precision", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="DemandIntel AI | Precision Forecast", layout="wide", initial_sidebar_state="collapsed")
 
-# Custom CSS for a "SaaS Product" look
+# Custom CSS for a "SaaS Product" look matching your image colors
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -20,15 +21,14 @@ st.markdown("""
         color: #111827;
     }
 
-    /* Remove Streamlit header/footer for a clean look */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
     /* Main Content Centering */
     .block-container {
-        padding-top: 5rem;
-        max-width: 900px;
+        padding-top: 2rem;
+        max-width: 1100px;
         margin: 0 auto;
     }
 
@@ -47,12 +47,12 @@ st.markdown("""
         width: 16px;
         height: 16px;
         background-color: #FFFFFF;
-        border: 2px solid #4F46E5;
+        border: 2px solid #00D1FF; /* Matching Image Teal */
         border-radius: 50%;
     }
 
     .step-label {
-        color: #4F46E5;
+        color: #00B4D8; /* Teal Accent */
         font-size: 0.75rem;
         font-weight: 700;
         text-transform: uppercase;
@@ -67,51 +67,66 @@ st.markdown("""
         margin-bottom: 20px;
     }
 
-    /* Input Styling */
-    .stSelectbox, .stRadio, .stNumberInput, .stTextInput {
-        background-color: #F9FAFB;
-        border-radius: 8px;
-    }
-
-    /* Premium Button */
+    /* Premium Button - Matching Image Color */
     div.stButton > button {
         width: 100%;
-        background-color: #111827 !important;
+        background: linear-gradient(90deg, #00D1FF 0%, #0077B6 100%) !important;
         color: #FFFFFF !important;
         border: none !important;
         padding: 18px !important;
         font-size: 1.1rem !important;
         font-weight: 600 !important;
         border-radius: 10px !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        transition: all 0.2s ease;
+        box-shadow: 0 4px 15px rgba(0, 209, 255, 0.3);
+        transition: all 0.3s ease;
     }
 
     div.stButton > button:hover {
-        background-color: #4F46E5 !important;
         transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 10px 20px rgba(0, 209, 255, 0.4);
     }
 
     /* Result Insights Card */
     .insight-card {
         background-color: #F8FAFC;
         border: 1px solid #E2E8F0;
-        padding: 30px;
-        border-radius: 20px;
+        padding: 40px;
+        border-radius: 24px;
         margin-top: 40px;
+    }
+    
+    /* Image Styling */
+    .hero-img {
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
     }
 
 </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER ---
-st.markdown('<div style="text-align: center; margin-bottom: 80px;">'
-            '<h1 style="font-size: 3rem; font-weight: 800; letter-spacing: -2px; color: #4F46E5;">Agilo<span style="color:#111827;">Forecast</span></h1>'
-            '<p style="color: #6B7280; font-size: 1.2rem;">AI-Driven Intelligence for Forecasting & Decisions</p>'
-            '</div>', unsafe_allow_html=True)
+# --- HEADER SECTION (With your Image on the side) ---
+col_h1, col_h2 = st.columns([1.2, 1])
 
-# --- STEP 1 ---
+with col_h1:
+    st.markdown('<div style="margin-top: 50px;">'
+                '<h1 style="font-size: 3.5rem; font-weight: 800; letter-spacing: -2.5px; line-height: 1; color: #111827; margin-bottom: 20px;">'
+                'DemandIntel<span style="color:#00D1FF;">.ai</span></h1>'
+                '<p style="color: #6B7280; font-size: 1.3rem; margin-bottom: 30px;">'
+                'The world\'s most precise AI-driven supply chain forecasting engine for modern enterprises.</p>'
+                '</div>', unsafe_allow_html=True)
+with col_h2:
+    # IMPORTANT: Replace 'forecast_image.png' with your actual image file path
+    try:
+        st.image("forecast_image.png", use_column_width=True) 
+    except:
+        # Placeholder if image file not found locally
+        st.markdown('<div style="background: linear-gradient(135deg, #E0F7FA 0%, #80DEEA 100%); width: 100%; height: 300px; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: #00838F; font-weight: bold; text-align: center; padding: 20px;">[ Place "Order Forecast" Image Here ]</div>', unsafe_allow_html=True)
+
+st.markdown('<br><br>', unsafe_allow_html=True)
+
+# --- VERTICAL ROADMAP STEPS ---
+
+# STEP 1
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
             '<div class="step-label">Step 01</div><div class="step-heading">Forecasting Scope</div>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
@@ -122,7 +137,7 @@ with col2:
         sub_choice = st.radio("Resolution Level", ["Model Wise", "Part No Wise"], horizontal=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 2 ---
+# STEP 2
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
             '<div class="step-label">Step 02</div><div class="step-heading">Temporal Parameters</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
@@ -132,7 +147,7 @@ with c2:
     horizon_label = st.selectbox("Standard Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 3 ---
+# STEP 3
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
             '<div class="step-label">Step 03</div><div class="step-heading">Modeling Strategy</div>', unsafe_allow_html=True)
 c3, c4 = st.columns(2)
@@ -152,8 +167,8 @@ with c4:
         tech_params['alpha'] = st.slider("Smoothing Alpha", 0.01, 1.0, 0.3)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 4 ---
-st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
+# STEP 4
+st.markdown('<div class="step-wrapper" style="border-left: none;"><div class="step-dot"></div>'
             '<div class="step-label">Step 04</div><div class="step-heading">Data Ingestion</div>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader("Drop Enterprise Data (CSV or Excel)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
@@ -197,26 +212,27 @@ if uploaded_file:
             target_df = df_long.groupby('Date')['qty'].sum().reset_index()
             item_name = "System-wide Aggregate"
         else:
-            selected = st.selectbox("🎯 Identity Analysis Target", df_long[id_col].unique())
+            selected = st.selectbox("🎯 Target Entity Selection", df_long[id_col].unique())
             target_df = df_long[df_long[id_col] == selected].copy()
             item_name = str(selected)
 
         res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
+        st.markdown('<div style="max-width: 900px; margin: 0 auto;">', unsafe_allow_html=True)
         if st.button("RUN PREDICTIVE ANALYSIS"):
             st.session_state.run_analysis = True
+        st.markdown('</div>', unsafe_allow_html=True)
 
         if st.session_state.get('run_analysis', False):
             st.markdown('<div class="insight-card">', unsafe_allow_html=True)
             
-            # --- CUSTOMER ADJUSTMENT PANEL ---
+            # --- VIEWPORT PANEL ---
             st.markdown("### 🛠 Operational Viewport")
             cx1, cx2 = st.columns(2)
             with cx1: dynamic_val = st.number_input("Forecast Length", min_value=1, value=15)
             with cx2: dynamic_unit = st.selectbox("View Period", ["Days", "Weeks", "Months", "Original Selection"])
             
-            # Calculations
             history = target_df['qty'].tolist()
             excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
             target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
@@ -248,59 +264,48 @@ if uploaded_file:
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
-            # Historical "Traded"
             fig.add_trace(go.Scatter(
                 x=target_df['Date'], y=target_df['qty'], name="Traded",
-                mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'),
-                marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))
+                mode='lines+markers', line=dict(color="#00B4D8", width=3, shape='spline'),
+                marker=dict(size=6, color="white", line=dict(color="#00B4D8", width=1.5))
             ))
 
             f_dates_conn = [last_date] + list(future_dates)
             f_excel_conn = [last_qty] + list(excel_calc_col)
             f_pred_conn = [last_qty] + list(predicted_calc_col)
 
-            # Excel Baseline
             fig.add_trace(go.Scatter(
-                x=f_dates_conn, y=f_excel_conn, name="Excel Calculated Forecast",
-                mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot', shape='spline'),
-                marker=dict(size=4, color="#999999")
+                x=f_dates_conn, y=f_excel_conn, name="Baseline Forecast",
+                mode='lines+markers', line=dict(color="#94A3B8", width=1.2, dash='dot', shape='spline'),
+                marker=dict(size=4, color="#94A3B8")
             ))
 
-            # AI Prediction
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_pred_conn, name="AI Predicted Forecast",
-                mode='lines+markers', line=dict(color="#ffcc00", width=2.5, dash='dash', shape='spline'),
-                marker=dict(size=5, color="white", line=dict(color="#ffcc00", width=1.5))
+                mode='lines+markers', line=dict(color="#00D1FF", width=3, dash='dash', shape='spline'),
+                marker=dict(size=5, color="white", line=dict(color="#00D1FF", width=1.5))
             ))
 
-            # Vertical split and annotations
             fig.add_vline(x=last_date, line_width=1.5, line_color="#cccccc")
-            
-            # Historical Marker Annotation
-            if len(target_df) > 0:
-                fig.add_annotation(x=target_df['Date'].iloc[int(len(target_df)*0.8)], 
-                                 y=target_df['qty'].max()*1.1, text="🛍️", showarrow=False, 
-                                 bgcolor="rgba(26,140,255,0.1)", bordercolor="#1a8cff", borderwidth=1.5, borderpad=6)
             
             # Forecast Marker Annotation
             if len(future_dates) > 0:
                 fig.add_annotation(x=future_dates[int(len(future_dates)*0.5)], 
-                                 y=max(predicted_calc_col)*1.1 if len(predicted_calc_col)>0 else last_qty, 
-                                 text="📢", showarrow=False, bgcolor="rgba(255,204,0,0.1)", 
-                                 bordercolor="#ffcc00", borderwidth=1.5, borderpad=6)
+                                 y=max(predicted_calc_col)*1.1, 
+                                 text="📢 AI INSIGHT", showarrow=False, bgcolor="rgba(0,209,255,0.1)", 
+                                 bordercolor="#00D1FF", borderwidth=1.5, borderpad=6)
 
             fig.update_layout(template="plotly_white", hovermode="x unified", height=500, 
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- 9. AI WIGGLE CHART (The Seasonal Patterns) ---
-            st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
-            st.info("This chart shows exactly how much the AI is adding or subtracting from the Excel baseline based on detected patterns.")
+            # --- 9. AI WIGGLE CHART ---
+            st.subheader("📉 AI Seasonality Patterns")
             fig_wig = go.Figure(go.Bar(
                 x=future_dates, y=ai_residuals, 
-                name="AI Adjustment", marker_color="#00B0F0"
+                name="AI Adjustment", marker_color="#00D1FF"
             ))
-            fig_wig.update_layout(template="plotly_white", height=300, title="Negative/Positive Patterns identified by AI")
+            fig_wig.update_layout(template="plotly_white", height=300, title="Pattern variances identified by machine learning")
             st.plotly_chart(fig_wig, use_container_width=True)
 
             # DATA TABLE
