@@ -49,11 +49,6 @@ st.markdown("""
         border-radius: 10px !important;
         border: none !important;
         font-size: 20px !important;
-        transition: 0.3s;
-    }
-    .execute-btn > button:hover {
-        background-color: #008f41 !important;
-        transform: scale(1.01);
     }
     .dynamic-box {
         background-color: #fff9db;
@@ -66,7 +61,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 AI-Powered Supply Chain Precision Forecast")
-st.markdown("---")
 
 # --- 2. STEP 1: SCOPE ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">1</div>Forecasting Scope Selection</div>', unsafe_allow_html=True)
@@ -151,7 +145,7 @@ if uploaded_file:
             target_df = df_long.groupby('Date')['qty'].sum().reset_index()
             item_name = "Aggregate Sum"
         else:
-            selected = st.selectbox(f"Select Target {sub_choice}", df_long[id_col].unique())
+            selected = st.selectbox(f"Select Target", df_long[id_col].unique())
             target_df = df_long[df_long[id_col] == selected].copy()
             item_name = str(selected)
 
@@ -166,9 +160,9 @@ if uploaded_file:
         if st.session_state.get('run_analysis', False):
             st.divider()
             
-            # --- DYNAMIC HORIZON BOX (CHANGEABLE IN GRAPH AREA) ---
+            # --- DYNAMIC HORIZON BOX ---
             st.markdown('<div class="dynamic-box">', unsafe_allow_html=True)
-            st.write("🔄 **Change Horizon Instantly for the Trend Chart:**")
+            st.write("🔄 **Adjust Horizon Instantly for the Trend Chart:**")
             col_hz1, col_hz2 = st.columns(2)
             with col_hz1:
                 dynamic_val = st.number_input("Enter Quantity", min_value=1, value=15)
@@ -176,19 +170,17 @@ if uploaded_file:
                 dynamic_unit = st.selectbox("Select Unit", ["Days", "Weeks", "Months", "Original Selection"])
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # 1. Excel Baseline Scalar
+            # Calculation
             history = target_df['qty'].tolist()
             excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
             
-            # 2. AI Model (Pattern Learning)
+            # AI Model
             target_df['month'] = target_df['Date'].dt.month
             target_df['dow'] = target_df['Date'].dt.dayofweek
             target_df['diff'] = target_df['qty'] - excel_base_scalar
-            
             model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
             model.fit(target_df[['month', 'dow']], target_df['diff'])
             
-            # 3. Dynamic Timeline Generation
             last_date = target_df['Date'].max()
             last_qty = target_df['qty'].iloc[-1]
             
@@ -201,7 +193,7 @@ if uploaded_file:
             
             future_dates = pd.date_range(start=last_date, end=end_date, freq=res_map[interval])[1:]
             
-            # 4. Predictions for Table and Graph
+            # Predictions
             f_df = pd.DataFrame({'Date': future_dates})
             f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
             ai_residuals = model.predict(f_df[['month', 'dow']])
@@ -214,44 +206,53 @@ if uploaded_file:
                 excel_calc_col.append(round(base, 2))
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
-            # --- PREVIEW GRAPH (Reference Style) ---
+            # --- TREND GRAPH (FIXED ANNOTATIONS) ---
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
-            # Historical Line
+            # Traded Line
             fig.add_trace(go.Scatter(
                 x=target_df['Date'], y=target_df['qty'], name="Traded",
                 mode='lines+markers', line=dict(color="#1a8cff", width=4, shape='spline'),
                 marker=dict(size=8, color="white", line=dict(color="#1a8cff", width=2))
             ))
 
-            # Prediction Line (Connected to last history point)
+            # Prediction Line
             f_dates_conn = [last_date] + list(future_dates)
             f_preds_conn = [last_qty] + list(predicted_calc_col)
-            
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_preds_conn, name="Prediction",
                 mode='lines', line=dict(color="#ffcc00", width=4, dash='dash', shape='spline')
             ))
 
-            # Vertical Separator
+            # Vertical Line
             fig.add_vline(x=last_date, line_width=2, line_dash="solid", line_color="#cccccc")
 
-            # Icons
-            fig.add_annotation(x=target_df['Date'].iloc[int(len(target_df)*0.8)], y=target_df['qty'].max()*1.1, text="🛍️", showarrow=False, bgcolor="rgba(26,140,255,0.1)", bordercolor="#1a8cff", borderpad=8, border_radius=50)
-            fig.add_annotation(x=future_dates[int(len(future_dates)*0.5)], y=max(predicted_calc_col)*1.1, text="📢", showarrow=False, bgcolor="rgba(255,204,0,0.1)", bordercolor="#ffcc00", borderpad=8, border_radius=50)
+            # Icons (Fixed properties)
+            fig.add_annotation(
+                x=target_df['Date'].iloc[int(len(target_df)*0.8)], 
+                y=target_df['qty'].max()*1.1, 
+                text="🛍️", showarrow=False, 
+                bgcolor="rgba(26,140,255,0.1)", 
+                bordercolor="#1a8cff", 
+                borderwidth=2,
+                borderpad=8
+            )
+            fig.add_annotation(
+                x=future_dates[int(len(future_dates)*0.5)] if len(future_dates)>0 else last_date, 
+                y=max(predicted_calc_col)*1.1 if len(predicted_calc_col)>0 else last_qty, 
+                text="📢", showarrow=False, 
+                bgcolor="rgba(255,204,0,0.1)", 
+                bordercolor="#ffcc00", 
+                borderwidth=2,
+                borderpad=8
+            )
 
-            fig.update_layout(template="plotly_white", hovermode="x unified", height=500, margin=dict(l=0,r=0,t=40,b=0))
+            fig.update_layout(template="plotly_white", hovermode="x unified", height=500)
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- AI WIGGLE CHART ---
-            st.subheader("📉 AI Pattern Adjustments (The Wiggles)")
-            fig_wig = go.Figure(go.Bar(x=future_dates, y=ai_residuals, name="AI Pattern", marker_color="#00B0F0"))
-            fig_wig.update_layout(template="plotly_white", height=250, title="Seasonality Added/Subtracted by AI")
-            st.plotly_chart(fig_wig, use_container_width=True)
-
-            # --- DATA TABLE & EXCEL DOWNLOAD ---
-            st.subheader("📋 Forecasted Results")
+            # --- TABLES & DOWNLOAD ---
+            st.subheader("📋 Forecast Data Results")
             download_df = pd.DataFrame({
                 "Date": future_dates.strftime('%d-%m-%Y'),
                 "Predicted Calculated Forecast": predicted_calc_col,
@@ -259,16 +260,10 @@ if uploaded_file:
             })
             st.dataframe(download_df, use_container_width=True, hide_index=True)
 
-            # Download Button
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                download_df.to_excel(writer, index=False, sheet_name='Forecast_Data')
-            st.download_button(
-                label="📥 Download Excel Result (3 Columns)",
-                data=output.getvalue(),
-                file_name=f"Forecast_{item_name}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                download_df.to_excel(writer, index=False, sheet_name='Forecast')
+            st.download_button(label="📥 Download Excel Result", data=output.getvalue(), file_name=f"Forecast_{item_name}.xlsx")
 
     except Exception as e:
         st.error(f"Error: {e}")
