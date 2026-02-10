@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from xgboost import XGBRegressor
+import io
 
 # --- UI SETTINGS ---
 st.set_page_config(page_title="AI Precision Forecast", layout="wide")
@@ -81,7 +82,7 @@ with col_b:
     horizon_label = st.selectbox("Default Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year", "3 years", "5 years"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 3: TECHNIQUES (EXCEL CALCULATION LOGIC) ---
+# --- STEP 3: TECHNIQUES ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">3</div>AI Strategy & Technique</div>', unsafe_allow_html=True)
 col_c, col_d = st.columns(2)
 with col_c:
@@ -108,7 +109,7 @@ st.markdown('<div class="step-card"><div class="step-header"><div class="step-nu
 uploaded_file = st.file_uploader("Upload Wide-Format Excel/CSV (Dates as Columns)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- BASELINE CALCULATION LOGIC (RE-ADDED) ---
+# --- BASELINE CALCULATION LOGIC ---
 def calculate_excel_baseline(demand, tech, params):
     if len(demand) == 0: return 0
     if tech == "Historical Average": return np.mean(demand)
@@ -162,7 +163,7 @@ if uploaded_file:
         if st.session_state.get('run_forecast', False):
             st.divider()
             
-            # --- DYNAMIC HORIZON DROP BOX (WITH TREND CHART) ---
+            # --- DYNAMIC HORIZON DROP BOX ---
             st.markdown('<div class="dynamic-control-box">', unsafe_allow_html=True)
             st.write("📊 **Adjust Forecast Trend Instantly:**")
             col_z1, col_z2 = st.columns(2)
@@ -172,21 +173,18 @@ if uploaded_file:
                 dynamic_unit = st.selectbox("Select Unit", ["Days", "Weeks", "Months", "Years", "Use Default Step 2"])
             st.markdown('</div>', unsafe_allow_html=True)
 
-            with st.spinner('Applying Excel Calculation + AI logic...'):
+            with st.spinner('Calculating Trends...'):
                 history = target_df['qty'].tolist()
+                excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
                 
-                # 1. Run Excel Baseline Calculation
-                excel_base = calculate_excel_baseline(history, technique, tech_params)
-                
-                # 2. Train AI (XGBoost)
+                # AI Model Training
                 target_df['month'] = target_df['Date'].dt.month
                 target_df['dow'] = target_df['Date'].dt.dayofweek
-                target_df['diff'] = target_df['qty'] - excel_base
-                
+                target_df['diff'] = target_df['qty'] - excel_base_scalar
                 model = XGBRegressor(n_estimators=150, max_depth=5, learning_rate=0.05, random_state=42)
                 model.fit(target_df[['month', 'dow']], target_df['diff'])
                 
-                # 3. Dynamic Horizon logic
+                # Timeline Logic
                 last_date = target_df['Date'].max()
                 if dynamic_unit == "Use Default Step 2":
                     h_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365, "3 years": 1095, "5 years": 1825}
@@ -198,33 +196,56 @@ if uploaded_file:
 
                 future_dates = pd.date_range(start=last_date, end=end_date, freq=res_map[interval])[1:]
                 
-                # Predict Future
+                # Predictions
                 f_df = pd.DataFrame({'Date': future_dates})
                 f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
-                ai_wiggles = model.predict(f_df[['month', 'dow']])
+                ai_residuals = model.predict(f_df[['month', 'dow']])
                 
-                # 4. Final Prediction (Baseline + AI)
-                final_preds = np.maximum(excel_base + ai_wiggles, 0)
+                # Columns Construction
+                excel_col = []
+                final_col = []
                 
-                if technique == "Ramp Up Evenly":
-                    final_preds = [p * (tech_params.get('ramp_factor', 1.05) ** i) for i, p in enumerate(final_preds, 1)]
+                for i, residual in enumerate(ai_residuals, 1):
+                    # Handle Ramp Up baseline growth if selected
+                    if technique == "Ramp Up Evenly":
+                        base_val = excel_base_scalar * (tech_params.get('ramp_factor', 1.05) ** i)
+                    else:
+                        base_val = excel_base_scalar
+                    
+                    excel_col.append(round(base_val, 2))
+                    final_col.append(round(max(base_val + residual, 0), 2))
 
-                # Visualization
+                # Chart
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['qty'], name="History", line=dict(color="#1e3d59")))
-                fig.add_trace(go.Scatter(x=future_dates, y=final_preds, name="AI Forecast", line=dict(color="#FF8C00", dash='dot', width=3)))
+                fig.add_trace(go.Scatter(x=future_dates, y=final_col, name="AI Forecast", line=dict(color="#FF8C00", dash='dot', width=3)))
                 fig.update_layout(title=f"Predictive Trend Analysis: {item_name}", template="plotly_white", hovermode="x unified")
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Metrics and Results
-                c1, c2 = st.columns(2)
-                with c1: st.info(f"**Calculated Excel Baseline:** {round(excel_base, 2)}")
-                with c2: st.success(f"**AI Strategy Applied:** {technique}")
-
+                # Results Table
                 st.subheader("📋 Predicted Data Results")
                 date_fmt = '%d-%m-%Y %H:%M' if interval=="Hourly" else '%d-%m-%Y'
-                res_df = pd.DataFrame({"Date": future_dates.strftime(date_fmt), "Forecast Qty": np.round(final_preds, 2)})
-                st.dataframe(res_df, use_container_width=True, hide_index=True)
+                
+                download_df = pd.DataFrame({
+                    "Date": future_dates.strftime(date_fmt),
+                    "Predicted Calculated Forecast": final_col,
+                    "Excel Calculated Forecast": excel_col
+                })
+                
+                st.dataframe(download_df, use_container_width=True, hide_index=True)
+
+                # --- EXCEL DOWNLOAD LOGIC ---
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    download_df.to_excel(writer, index=False, sheet_name='Forecast_Results')
+                processed_data = output.getvalue()
+
+                st.download_button(
+                    label="📥 Download Forecast as Excel",
+                    data=processed_data,
+                    file_name=f"Forecast_{item_name}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
     except Exception as e:
         st.error(f"Error in process: {e}")
