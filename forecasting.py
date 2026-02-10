@@ -107,7 +107,7 @@ st.markdown("""
 
 # --- HEADER ---
 st.markdown('<div style="text-align: center; margin-bottom: 80px;">'
-            '<h1 style="font-size: 3rem; font-weight: 800; letter-spacing: -2px; color: #111827;">DemandIntel<span style="color:#4F46E5;">.ai</span></h1>'
+            '<h1 style="font-size: 3rem; font-weight: 800; letter-spacing: -2px; color: #111827;">Agilo<span style="color:#4F46E5;">Forecast</span></h1>'
             '<p style="color: #6B7280; font-size: 1.2rem;">Next-generation Demand Forecasting & Supply Chain Optimization</p>'
             '</div>', unsafe_allow_html=True)
 
