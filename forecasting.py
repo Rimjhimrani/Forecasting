@@ -107,7 +107,7 @@ st.markdown('<div class="step-card"><div class="step-header"><div class="step-nu
 uploaded_file = st.file_uploader("Upload CSV/Excel (Dates as Columns)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ---  core calculation function ---
+# --- CORE CALCULATION LOGIC ---
 def calculate_excel_baseline(demand, tech, params):
     if len(demand) == 0: return 0
     if tech == "Historical Average": return np.mean(demand)
@@ -161,9 +161,9 @@ if uploaded_file:
         if st.session_state.get('run_analysis', False):
             st.divider()
             
-            # --- DYNAMIC HORIZON BOX (Changeable in Graph Area) ---
+            # --- DYNAMIC HORIZON BOX (Graph Control Area) ---
             st.markdown('<div class="dynamic-box">', unsafe_allow_html=True)
-            st.write("🔄 **Adjust Horizon Instantly for the Trend Chart:**")
+            st.write("🔄 **Change Horizon Instantly for the Trend Chart:**")
             col_hz1, col_hz2 = st.columns(2)
             with col_hz1:
                 dynamic_val = st.number_input("Enter Quantity", min_value=1, value=15)
@@ -171,18 +171,18 @@ if uploaded_file:
                 dynamic_unit = st.selectbox("Select Unit", ["Days", "Weeks", "Months", "Original Selection"])
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # 1. Calculation Logic
+            # 1. Excel Baseline scalar
             history = target_df['qty'].tolist()
             excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
             
-            # 2. AI Adjustment
+            # 2. AI Model Training (Residuals)
             target_df['month'] = target_df['Date'].dt.month
             target_df['dow'] = target_df['Date'].dt.dayofweek
             target_df['diff'] = target_df['qty'] - excel_base_scalar
             model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
             model.fit(target_df[['month', 'dow']], target_df['diff'])
             
-            # 3. Timeline Management
+            # 3. Future Dates Calculation
             last_date = target_df['Date'].max()
             last_qty = target_df['qty'].iloc[-1]
             
@@ -195,7 +195,7 @@ if uploaded_file:
             
             future_dates = pd.date_range(start=last_date, end=end_date, freq=res_map[interval])[1:]
             
-            # 4. Final Data Generation
+            # 4. Predictions Construction
             f_df = pd.DataFrame({'Date': future_dates})
             f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
             ai_residuals = model.predict(f_df[['month', 'dow']])
@@ -208,37 +208,35 @@ if uploaded_file:
                 excel_calc_col.append(round(base, 2))
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
-            # --- 8. PREMIUM TREND GRAPH ---
+            # --- 8. TREND GRAPH (Premium Curvy Style) ---
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
-            # TRADED (Historical Blue)
+            # TRADED
             fig.add_trace(go.Scatter(
                 x=target_df['Date'], y=target_df['qty'], name="Traded",
-                mode='lines+markers', line=dict(color="#1a8cff", width=2, shape='spline'),
+                mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'),
                 marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))
             ))
 
-            # Connection Point logic
             f_dates_conn = [last_date] + list(future_dates)
             f_excel_conn = [last_qty] + list(excel_calc_col)
             f_pred_conn = [last_qty] + list(predicted_calc_col)
 
-            # EXCEL CALCULATED (Grey Baseline)
+            # EXCEL BASELINE (Baseline)
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_excel_conn, name="Excel Calculated Forecast",
                 mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot', shape='spline'),
                 marker=dict(size=4, color="#999999")
             ))
 
-            # AI PREDICTED (Gold Final)
+            # AI PREDICTION (Final)
             fig.add_trace(go.Scatter(
                 x=f_dates_conn, y=f_pred_conn, name="AI Predicted Forecast",
-                mode='lines+markers', line=dict(color="#ffcc00", width=2, dash='dash', shape='spline'),
+                mode='lines+markers', line=dict(color="#ffcc00", width=2.5, dash='dash', shape='spline'),
                 marker=dict(size=5, color="white", line=dict(color="#ffcc00", width=1.5))
             ))
 
-            # Vertical Line & Icons
             fig.add_vline(x=last_date, line_width=1.5, line_color="#cccccc")
             fig.add_annotation(x=target_df['Date'].iloc[int(len(target_df)*0.8)], y=target_df['qty'].max()*1.1, text="🛍️", showarrow=False, bgcolor="rgba(26,140,255,0.1)", bordercolor="#1a8cff", borderwidth=1.5, borderpad=6)
             fig.add_annotation(x=future_dates[int(len(future_dates)*0.5)] if len(future_dates)>0 else last_date, y=max(predicted_calc_col)*1.1 if len(predicted_calc_col)>0 else last_qty, text="📢", showarrow=False, bgcolor="rgba(255,204,0,0.1)", bordercolor="#ffcc00", borderwidth=1.5, borderpad=6)
@@ -246,7 +244,17 @@ if uploaded_file:
             fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- 9. DATA TABLE & EXCEL DOWNLOAD ---
+            # --- 9. AI WIGGLE CHART (The Seasonal Patterns) ---
+            st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
+            st.info("This chart shows exactly how much the AI is adding or subtracting from the Excel baseline based on detected patterns.")
+            fig_wig = go.Figure(go.Bar(
+                x=future_dates, y=ai_residuals, 
+                name="AI Adjustment", marker_color="#00B0F0"
+            ))
+            fig_wig.update_layout(template="plotly_white", height=300, title="Negative/Positive Patterns identified by AI")
+            st.plotly_chart(fig_wig, use_container_width=True)
+
+            # --- 10. DATA TABLE & DOWNLOAD ---
             st.subheader("📋 Forecasted Results Table")
             download_df = pd.DataFrame({
                 "Date": future_dates.strftime('%d-%m-%Y'),
@@ -255,17 +263,10 @@ if uploaded_file:
             })
             st.dataframe(download_df, use_container_width=True, hide_index=True)
 
-            # Generate Downloadable Excel
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 download_df.to_excel(writer, index=False, sheet_name='AI_Forecast')
-            
-            st.download_button(
-                label="📥 Download Excel Result (3 Columns)",
-                data=output.getvalue(),
-                file_name=f"Forecast_{item_name}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            st.download_button(label="📥 Download Excel Result (3 Columns)", data=output.getvalue(), file_name=f"Forecast_{item_name}.xlsx")
 
     except Exception as e:
         st.error(f"Error: {e}")
