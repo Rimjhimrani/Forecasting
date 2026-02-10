@@ -10,25 +10,17 @@ st.set_page_config(page_title="AI Precision Forecast", layout="wide")
 
 st.markdown("""
 <style>
-    /* Main background with subtle gradient */
+    /* Main background */
     .main { 
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        background-color: #ffffff;
     }
     
-    /* Step cards with modern shadow and hover effect */
+    /* Step cards - no visible box */
     .step-card {
-        background: linear-gradient(145deg, #ffffff, #f8f9fa);
-        padding: 30px;
-        border-radius: 20px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-        margin-bottom: 30px;
-        border-left: 5px solid #667eea;
-        transition: all 0.3s ease;
-    }
-    
-    .step-card:hover {
-        box-shadow: 0 12px 32px rgba(0,0,0,0.12);
-        transform: translateY(-2px);
+        background: transparent;
+        padding: 20px 0px;
+        margin-bottom: 40px;
+        border-left: none;
     }
     
     /* Header styling with gradient text */
@@ -37,9 +29,9 @@ st.markdown("""
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        font-size: 26px;
+        font-size: 28px;
         font-weight: bold;
-        margin-bottom: 20px;
+        margin-bottom: 15px;
         display: flex;
         align-items: center;
     }
@@ -57,7 +49,7 @@ st.markdown("""
         margin-right: 15px;
         font-size: 20px;
         font-weight: bold;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
     
     /* Execute button with gradient and animation */
@@ -79,15 +71,13 @@ st.markdown("""
         box-shadow: 0 10px 30px rgba(102, 126, 234, 0.6) !important;
     }
     
-    /* Dynamic control box with gradient border */
+    /* Dynamic control box - clean design without borders */
     .dynamic-box {
-        background: linear-gradient(white, white) padding-box,
-                    linear-gradient(135deg, #667eea, #764ba2) border-box;
-        border: 3px solid transparent;
+        background: #f8f9fa;
         padding: 25px;
-        border-radius: 15px;
+        border-radius: 12px;
         margin-bottom: 25px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        border: none;
     }
     
     /* Title styling */
@@ -110,29 +100,28 @@ st.markdown("""
     
     /* Info box styling */
     .stAlert {
-        border-radius: 12px;
-        border-left: 5px solid #667eea;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+        background-color: #f0f4ff;
     }
     
     /* Input fields styling */
     .stSelectbox, .stNumberInput, .stTextInput, .stRadio {
-        background-color: white;
-        border-radius: 10px;
+        background-color: transparent;
     }
     
-    /* File uploader styling */
+    /* File uploader styling - no box */
     .stFileUploader {
-        background-color: white;
+        background-color: #f8f9fa;
         padding: 20px;
-        border-radius: 15px;
-        border: 2px dashed #667eea;
+        border-radius: 10px;
+        border: 2px dashed #cbd5e0;
     }
     
     /* DataFrame styling */
     .dataframe {
-        border-radius: 10px;
+        border-radius: 8px;
         overflow: hidden;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
     
     /* Download button */
@@ -155,8 +144,15 @@ st.markdown("""
     hr {
         margin: 40px 0;
         border: none;
-        height: 2px;
-        background: linear-gradient(90deg, transparent, #667eea, transparent);
+        height: 1px;
+        background: #e2e8f0;
+    }
+    
+    /* Section separators */
+    .section-separator {
+        border-bottom: 2px solid #f0f0f0;
+        margin: 30px 0;
+        padding-bottom: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
