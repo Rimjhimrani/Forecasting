@@ -6,105 +6,264 @@ from xgboost import XGBRegressor
 import io
 
 # --- 1. UI SETTINGS & CUSTOM CSS ---
-st.set_page_config(page_title="AI Precision Forecast", layout="wide")
+st.set_page_config(page_title="AI Precision Forecast", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
-    .main { background-color: #f4f7f6; }
-    .step-card {
-        background-color: #ffffff;
-        padding: 25px;
-        border-radius: 15px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        margin-bottom: 25px;
-        border-left: 6px solid #1a8cff;
+    /* Global Styles */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+    
+    .main { 
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        font-family: 'Inter', sans-serif;
     }
+    
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    
+    /* Header Styling */
+    h1 {
+        color: white !important;
+        font-weight: 700 !important;
+        text-align: center;
+        font-size: 3rem !important;
+        margin-bottom: 0.5rem !important;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    /* Step Card - Glass Morphism Effect */
+    .step-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        padding: 30px;
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        margin-bottom: 25px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .step-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Step Header with Gradient */
     .step-header {
-        color: #1e3d59;
-        font-size: 24px;
-        font-weight: bold;
-        margin-bottom: 15px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 26px;
+        font-weight: 700;
+        margin-bottom: 20px;
         display: flex;
         align-items: center;
     }
+    
+    /* Step Number Badge */
     .step-number {
-        background-color: #1a8cff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border-radius: 50%;
-        width: 35px;
-        height: 35px;
+        width: 42px;
+        height: 42px;
         display: flex;
         justify-content: center;
         align-items: center;
         margin-right: 15px;
-        font-size: 18px;
-        font-weight: bold;
+        font-size: 20px;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
     }
+    
+    /* Execute Button - Premium Style */
     .execute-btn > button {
         width: 100% !important;
-        background-color: #00B050 !important;
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
         color: white !important;
-        font-weight: bold !important;
-        padding: 18px !important;
-        border-radius: 10px !important;
+        font-weight: 700 !important;
+        padding: 20px !important;
+        border-radius: 15px !important;
         border: none !important;
-        font-size: 20px !important;
+        font-size: 22px !important;
+        box-shadow: 0 8px 25px rgba(56, 239, 125, 0.3) !important;
+        transition: all 0.3s ease !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
+    
+    .execute-btn > button:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 12px 35px rgba(56, 239, 125, 0.4) !important;
+    }
+    
+    /* Dynamic Control Box */
     .dynamic-box {
-        background-color: #fff9db;
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        padding: 25px;
+        border-radius: 15px;
+        border: 2px solid #ff9a76;
+        margin-bottom: 25px;
+        box-shadow: 0 6px 20px rgba(252, 182, 159, 0.3);
+    }
+    
+    .dynamic-box-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #d63031;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Input Styling */
+    .stSelectbox, .stRadio, .stNumberInput, .stTextInput {
+        background-color: white;
+        border-radius: 10px;
+    }
+    
+    /* File Uploader Styling */
+    [data-testid="stFileUploader"] {
+        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        padding: 30px;
+        border-radius: 15px;
+        border: 2px dashed #667eea;
+    }
+    
+    [data-testid="stFileUploader"] label {
+        font-weight: 600;
+        color: #2d3436;
+        font-size: 16px;
+    }
+    
+    /* DataFrame Styling */
+    .dataframe {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Download Button */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border-radius: 10px !important;
+        padding: 12px 24px !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(250, 112, 154, 0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stDownloadButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(250, 112, 154, 0.4) !important;
+    }
+    
+    /* Info/Success/Error Boxes */
+    .stAlert {
+        border-radius: 10px;
+        border-left: 5px solid;
+    }
+    
+    /* Divider */
+    hr {
+        margin: 2rem 0;
+        border: none;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+    }
+    
+    /* Subheader Styling */
+    .stSubheader, h2, h3 {
+        color: white !important;
+        font-weight: 600 !important;
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+    }
+    
+    /* Chart Container */
+    .chart-container {
+        background: white;
         padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #fab005;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
         margin-bottom: 20px;
+    }
+    
+    /* Metric Cards */
+    [data-testid="stMetricValue"] {
+        font-size: 28px;
+        font-weight: 700;
+    }
+    
+    /* Radio Button Styling */
+    .stRadio > label {
+        font-weight: 600;
+        color: #2d3436;
+    }
+    
+    /* Select Box Styling */
+    .stSelectbox > label {
+        font-weight: 600;
+        color: #2d3436;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 AI-Powered Supply Chain Precision Forecast")
+# Animated Title
+st.markdown("""
+    <h1>📊 AI-Powered Supply Chain Precision Forecast</h1>
+    <p style='text-align: center; color: white; font-size: 1.2rem; margin-bottom: 2rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);'>
+        Intelligent Demand Forecasting with Machine Learning
+    </p>
+""", unsafe_allow_html=True)
 
 # --- 2. STEP 1: SCOPE ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">1</div>Forecasting Scope Selection</div>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 with col1:
-    main_choice = st.radio("Primary Selection Path", ["Aggregate Wise", "Product Wise"], horizontal=True)
+    main_choice = st.radio("🎯 Primary Selection Path", ["Aggregate Wise", "Product Wise"], horizontal=True)
 with col2:
     sub_choice = None
     if main_choice == "Product Wise":
-        sub_choice = st.radio("Specific Level", ["Model Wise", "Part No Wise"], horizontal=True)
+        sub_choice = st.radio("🔍 Specific Level", ["Model Wise", "Part No Wise"], horizontal=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 3. STEP 2: TIMELINE ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">2</div>Timeline Configuration</div>', unsafe_allow_html=True)
 col_a, col_b = st.columns(2)
 with col_a:
-    interval = st.selectbox("Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
+    interval = st.selectbox("⏱️ Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with col_b:
-    horizon_label = st.selectbox("Default Forecast Horizon (Initial)", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
+    horizon_label = st.selectbox("📅 Default Forecast Horizon (Initial)", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 4. STEP 3: TECHNIQUES ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">3</div>Select Strategy & AI Technique</div>', unsafe_allow_html=True)
 col_c, col_d = st.columns(2)
 with col_c:
-    technique = st.selectbox("Excel Strategy (Baseline)", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
+    technique = st.selectbox("🧮 Excel Strategy (Baseline)", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 
 tech_params = {}
 with col_d:
     if technique == "Weightage Average":
-        w_in = st.text_input("Manual Weights (comma separated)", "0.2, 0.3, 0.5")
+        w_in = st.text_input("⚖️ Manual Weights (comma separated)", "0.2, 0.3, 0.5")
         try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
         except: tech_params['weights'] = np.array([0.33, 0.33, 0.34])
     elif technique == "Moving Average":
-        tech_params['n'] = st.number_input("Lookback window (n)", 2, 30, 7)
+        tech_params['n'] = st.number_input("🔄 Lookback window (n)", 2, 30, 7)
     elif technique == "Ramp Up Evenly":
-        tech_params['ramp_factor'] = st.number_input("Growth Factor (Multiplier)", 1.0, 2.0, 1.05)
+        tech_params['ramp_factor'] = st.number_input("📈 Growth Factor (Multiplier)", 1.0, 2.0, 1.05)
     elif technique == "Exponentially":
-        tech_params['alpha'] = st.slider("Smoothing Alpha", 0.01, 1.0, 0.3)
+        tech_params['alpha'] = st.slider("🎚️ Smoothing Alpha", 0.01, 1.0, 0.3)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 5. STEP 4: UPLOAD ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">4</div>Data Ingestion</div>', unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Upload CSV/Excel (Dates as Columns)", type=['xlsx', 'csv'])
+uploaded_file = st.file_uploader("📁 Upload CSV/Excel (Dates as Columns)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- CORE CALCULATION LOGIC ---
@@ -146,7 +305,7 @@ if uploaded_file:
             target_df = df_long.groupby('Date')['qty'].sum().reset_index()
             item_name = "Aggregate Sum"
         else:
-            selected = st.selectbox(f"Select Target Item", df_long[id_col].unique())
+            selected = st.selectbox(f"🔎 Select Target Item", df_long[id_col].unique())
             target_df = df_long[df_long[id_col] == selected].copy()
             item_name = str(selected)
 
@@ -163,12 +322,12 @@ if uploaded_file:
             
             # --- DYNAMIC HORIZON BOX (Graph Control Area) ---
             st.markdown('<div class="dynamic-box">', unsafe_allow_html=True)
-            st.write("🔄 **Change Horizon Instantly for the Trend Chart:**")
+            st.markdown('<div class="dynamic-box-title">🔄 Change Horizon Instantly for the Trend Chart</div>', unsafe_allow_html=True)
             col_hz1, col_hz2 = st.columns(2)
             with col_hz1:
-                dynamic_val = st.number_input("Enter Quantity", min_value=1, value=15)
+                dynamic_val = st.number_input("📊 Enter Quantity", min_value=1, value=15)
             with col_hz2:
-                dynamic_unit = st.selectbox("Select Unit", ["Days", "Weeks", "Months", "Original Selection"])
+                dynamic_unit = st.selectbox("📐 Select Unit", ["Days", "Weeks", "Months", "Original Selection"])
             st.markdown('</div>', unsafe_allow_html=True)
 
             # 1. Excel Baseline scalar
@@ -209,6 +368,7 @@ if uploaded_file:
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
             # --- 8. TREND GRAPH (Premium Curvy Style) ---
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
@@ -243,18 +403,22 @@ if uploaded_file:
 
             fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
             # --- 9. AI WIGGLE CHART (The Seasonal Patterns) ---
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
-            st.info("This chart shows exactly how much the AI is adding or subtracting from the Excel baseline based on detected patterns.")
+            st.info("🎯 This chart shows exactly how much the AI is adding or subtracting from the Excel baseline based on detected patterns.")
             fig_wig = go.Figure(go.Bar(
                 x=future_dates, y=ai_residuals, 
                 name="AI Adjustment", marker_color="#00B0F0"
             ))
             fig_wig.update_layout(template="plotly_white", height=300, title="Negative/Positive Patterns identified by AI")
             st.plotly_chart(fig_wig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
             # --- 10. DATA TABLE & DOWNLOAD ---
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.subheader("📋 Forecasted Results Table")
             download_df = pd.DataFrame({
                 "Date": future_dates.strftime('%d-%m-%Y'),
@@ -267,6 +431,7 @@ if uploaded_file:
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 download_df.to_excel(writer, index=False, sheet_name='AI_Forecast')
             st.download_button(label="📥 Download Excel Result (3 Columns)", data=output.getvalue(), file_name=f"Forecast_{item_name}.xlsx")
+            st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"❌ Error: {e}")
