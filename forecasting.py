@@ -5,137 +5,159 @@ import plotly.graph_objects as go
 from xgboost import XGBRegressor
 import io
 
-# --- 1. UI SETTINGS & MINIMALIST CSS ---
-st.set_page_config(page_title="AI Precision Forecast", layout="centered", initial_sidebar_state="collapsed")
+# --- 1. PREMIUM UI & CLEAN WHITE CSS ---
+st.set_page_config(page_title="AI Precision Forecast", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
-    /* Global White Aesthetic */
+    /* Global Styles */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+        background-color: #ffffff;
+    }
+
     .stApp {
         background-color: #ffffff;
     }
-    
-    /* Clean Title Styling */
-    .title-text {
-        text-align: center;
-        color: #111827;
-        font-size: 2.2rem;
-        font-weight: 800;
-        margin-bottom: 0.5rem;
-    }
-    
-    .subtitle-text {
-        text-align: center;
-        color: #6B7280;
-        margin-bottom: 3rem;
+
+    /* Main Container */
+    .main-content {
+        max-width: 900px;
+        margin: 0 auto;
     }
 
-    /* Vertical Step Container */
-    .step-section {
-        border-bottom: 1px solid #F3F4F6;
-        padding: 2.5rem 0;
-    }
-    
-    .step-badge {
-        background: #F3F4F6;
-        color: #1f2937;
-        font-size: 0.7rem;
-        font-weight: 700;
-        padding: 4px 10px;
-        border-radius: 4px;
-        text-transform: uppercase;
-        margin-bottom: 10px;
-        display: inline-block;
+    /* Step Card Styling */
+    .step-container {
+        background: #ffffff;
         border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 30px;
+        margin-bottom: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04);
+        transition: all 0.3s ease;
     }
-    
+
+    .step-container:hover {
+        border-color: #2563eb;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Number Badge */
+    .step-badge {
+        display: inline-block;
+        background: #2563eb;
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 20px;
+        margin-bottom: 12px;
+    }
+
     .step-title {
-        font-size: 1.4rem;
+        font-size: 20px;
         font-weight: 700;
         color: #111827;
-        margin-bottom: 1.5rem;
+        margin-bottom: 20px;
     }
 
-    /* Primary Execute Button */
-    div.stButton > button:first-child {
+    /* Input Field Styling */
+    .stSelectbox, .stRadio, .stNumberInput {
+        margin-bottom: 10px;
+    }
+
+    /* Execute Button */
+    div.stButton > button {
         width: 100%;
-        background-color: #000000;
-        color: #ffffff;
-        font-weight: 600;
-        padding: 0.75rem;
-        border-radius: 8px;
-        border: none;
-        margin-top: 2rem;
-        transition: 0.3s;
+        background-color: #111827 !important;
+        color: white !important;
+        border-radius: 8px !important;
+        padding: 16px !important;
+        font-size: 18px !important;
+        font-weight: 600 !important;
+        border: none !important;
+        margin-top: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    
+
     div.stButton > button:hover {
-        background-color: #374151;
-        color: #ffffff;
+        background-color: #2563eb !important;
+        transform: translateY(-1px);
     }
 
-    /* Result Box Adjustment */
-    .result-container {
-        margin-top: 3rem;
-        padding-top: 2rem;
-        border-top: 2px solid #000000;
-    }
-
-    /* Dynamic Control Area */
-    .control-area {
-        background-color: #F9FAFB;
-        padding: 20px;
-        border-radius: 10px;
+    /* Dynamic Horizon Box */
+    .control-panel {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        padding: 24px;
+        border-radius: 12px;
         margin-bottom: 30px;
+    }
+
+    /* Table Styling */
+    .stDataFrame {
+        border-radius: 8px;
+        overflow: hidden;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER ---
-st.markdown('<div class="title-text">AI Precision Forecast</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle-text">Follow the 4 steps below to generate your prediction.</div>', unsafe_allow_html=True)
+# --- APP HEADER ---
+st.markdown('<div style="text-align: center; padding: 40px 0;">'
+            '<h1 style="font-size: 2.5rem; color: #111827; font-weight: 800; margin-bottom: 10px;">📊 AI Supply Chain Precision</h1>'
+            '<p style="color: #6b7280; font-size: 1.1rem;">Follow the vertical roadmap to generate your automated forecasts.</p>'
+            '</div>', unsafe_allow_html=True)
+
+# Wrap everything in a centered div
+st.markdown('<div class="main-content">', unsafe_allow_html=True)
 
 # --- STEP 1: SCOPE ---
-st.markdown('<div class="step-section"><span class="step-badge">Step 1</span><div class="step-title">Forecasting Scope</div>', unsafe_allow_html=True)
-main_choice = st.radio("Selection Type", ["Aggregate Wise", "Product Wise"], horizontal=True, label_visibility="collapsed")
-sub_choice = None
-if main_choice == "Product Wise":
-    st.write("Select Detail Level:")
-    sub_choice = st.radio("Detail Level", ["Model Wise", "Part No Wise"], horizontal=True, label_visibility="collapsed")
+st.markdown('<div class="step-container"><span class="step-badge">STEP 1</span><div class="step-title">Forecasting Scope</div>', unsafe_allow_html=True)
+c1, c2 = st.columns(2)
+with c1:
+    main_choice = st.radio("Selection Type", ["Aggregate Wise", "Product Wise"], horizontal=True)
+with c2:
+    sub_choice = None
+    if main_choice == "Product Wise":
+        sub_choice = st.radio("Detail Level", ["Model Wise", "Part No Wise"], horizontal=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 2: TIMELINE ---
-st.markdown('<div class="step-section"><span class="step-badge">Step 2</span><div class="step-title">Time Configuration</div>', unsafe_allow_html=True)
-c_t1, c_t2 = st.columns(2)
-with c_t1:
-    interval = st.selectbox("Interval Frequency", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
-with c_t2:
-    horizon_label = st.selectbox("Default Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
+st.markdown('<div class="step-container"><span class="step-badge">STEP 2</span><div class="step-title">Timeline Configuration</div>', unsafe_allow_html=True)
+c3, c4 = st.columns(2)
+with c3:
+    interval = st.selectbox("Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
+with c4:
+    horizon_label = st.selectbox("Default Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 3: TECHNIQUES ---
-st.markdown('<div class="step-section"><span class="step-badge">Step 3</span><div class="step-title">Baseline Strategy</div>', unsafe_allow_html=True)
-technique = st.selectbox("Statistical Method", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
-
-tech_params = {}
-if technique == "Weightage Average":
-    w_in = st.text_input("Weights (comma separated)", "0.3, 0.7")
-    try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
-    except: tech_params['weights'] = np.array([0.5, 0.5])
-elif technique == "Moving Average":
-    tech_params['n'] = st.number_input("Window Size (n)", 2, 30, 7)
-elif technique == "Ramp Up Evenly":
-    tech_params['ramp_factor'] = st.number_input("Growth Factor (Multiplier)", 1.0, 2.0, 1.05)
-elif technique == "Exponentially":
-    tech_params['alpha'] = st.slider("Smoothing Factor (Alpha)", 0.01, 1.0, 0.3)
+# --- STEP 3: STRATEGY ---
+st.markdown('<div class="step-container"><span class="step-badge">STEP 3</span><div class="step-title">Select Baseline Technique</div>', unsafe_allow_html=True)
+c5, c6 = st.columns(2)
+with c5:
+    technique = st.selectbox("Statistical Strategy", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
+with c6:
+    tech_params = {}
+    if technique == "Weightage Average":
+        w_in = st.text_input("Weights (comma separated)", "0.3, 0.7")
+        try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
+        except: tech_params['weights'] = np.array([0.5, 0.5])
+    elif technique == "Moving Average":
+        tech_params['n'] = st.number_input("Lookback Window (n)", 2, 30, 7)
+    elif technique == "Ramp Up Evenly":
+        tech_params['ramp_factor'] = st.number_input("Growth Factor", 1.0, 2.0, 1.05)
+    elif technique == "Exponentially":
+        tech_params['alpha'] = st.slider("Smoothing (Alpha)", 0.01, 1.0, 0.3)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 4: UPLOAD ---
-st.markdown('<div class="step-section"><span class="step-badge">Step 4</span><div class="step-title">Data Ingestion</div>', unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Upload CSV or Excel (Horizontal Format)", type=['xlsx', 'csv'])
+st.markdown('<div class="step-container"><span class="step-badge">STEP 4</span><div class="step-title">Data Ingestion</div>', unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Upload CSV or Excel file (Dates as columns)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- CORE LOGIC ---
+# --- CORE CALCULATION LOGIC ---
 def calculate_excel_baseline(demand, tech, params):
     if len(demand) == 0: return 0
     if tech == "Historical Average": return np.mean(demand)
@@ -157,7 +179,7 @@ def calculate_excel_baseline(demand, tech, params):
         return forecast
     return np.mean(demand)
 
-# --- EXECUTION ---
+# --- EXECUTION FLOW ---
 if uploaded_file:
     try:
         raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
@@ -181,22 +203,22 @@ if uploaded_file:
         res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
-        if st.button("🚀 EXECUTE AI TREND ANALYSIS"):
+        if st.button("🚀 EXECUTE PREDICTIVE ENGINE"):
             st.session_state.run_analysis = True
 
         if st.session_state.get('run_analysis', False):
-            st.markdown('<div class="result-container">', unsafe_allow_html=True)
+            st.markdown('<hr style="margin: 50px 0; border-top: 2px solid #f3f4f6;">', unsafe_allow_html=True)
             
-            # Dynamic Control
-            st.markdown('<div class="control-area"><b>Live Horizon Adjust</b>', unsafe_allow_html=True)
-            col_h1, col_h2 = st.columns(2)
-            with col_h1:
-                dynamic_val = st.number_input("Lookahead Qty", min_value=1, value=15)
-            with col_h2:
-                dynamic_unit = st.selectbox("Unit", ["Days", "Weeks", "Months", "Original Selection"])
+            # --- RESULTS SECTION ---
+            st.markdown('<div class="control-panel"><b>🔄 Dynamic Horizon Adjustment</b><br><br>', unsafe_allow_html=True)
+            c_h1, c_h2 = st.columns(2)
+            with c_h1:
+                dynamic_val = st.number_input("Prediction Length", min_value=1, value=15)
+            with c_h2:
+                dynamic_unit = st.selectbox("Time Unit", ["Days", "Weeks", "Months", "Original Selection"])
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # Modeling
+            # Calculation Core
             history = target_df['qty'].tolist()
             excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
             
@@ -229,33 +251,35 @@ if uploaded_file:
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
             # --- PLOTTING ---
-            st.subheader(f"Trend Chart: {item_name}")
+            st.subheader(f"📈 Trend Analysis: {item_name}")
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['qty'], name="Traded", line=dict(color="#111827", width=2)))
+            fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['qty'], name="Actual History", line=dict(color="#111827", width=3, shape='spline')))
             
             f_dates_conn = [last_date] + list(future_dates)
-            fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty]+excel_calc_col, name="Baseline", line=dict(color="#9CA3AF", dash='dot')))
-            fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty]+predicted_calc_col, name="AI Prediction", line=dict(color="#2563EB", width=3)))
+            fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty]+excel_calc_col, name="Baseline", line=dict(color="#94a3b8", width=2, dash='dot')))
+            fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty]+predicted_calc_col, name="AI Prediction", line=dict(color="#2563eb", width=4, shape='spline')))
             
-            fig.update_layout(template="plotly_white", hovermode="x unified", height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            fig.update_layout(template="plotly_white", hovermode="x unified", height=500, margin=dict(l=0,r=0,t=40,b=0), 
+                              legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True)
 
-            # AI Residuals (Wiggles)
-            st.subheader("AI Seasonal Adjustment")
-            fig_wig = go.Figure(go.Bar(x=future_dates, y=ai_residuals, marker_color="#3B82F6"))
-            fig_wig.update_layout(template="plotly_white", height=250)
+            # AI Pattern Bar
+            st.subheader("📉 AI Correction Patterns (Residuals)")
+            fig_wig = go.Figure(go.Bar(x=future_dates, y=ai_residuals, marker_color="#3b82f6"))
+            fig_wig.update_layout(template="plotly_white", height=250, margin=dict(l=0,r=0,t=0,b=0))
             st.plotly_chart(fig_wig, use_container_width=True)
 
-            # Data Table
-            st.subheader("Results Table")
-            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Forecast": predicted_calc_col, "Baseline": excel_calc_col})
+            # Table & Export
+            st.subheader("📋 Forecasted Output")
+            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Predicted Qty": predicted_calc_col, "Excel Baseline": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 res_df.to_excel(writer, index=False)
-            st.download_button("📥 Download Excel Report", output.getvalue(), f"Forecast_{item_name}.xlsx")
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.download_button("📥 Download Full Prediction (Excel)", output.getvalue(), f"AI_Forecast_{item_name}.xlsx")
 
     except Exception as e:
-        st.error(f"Error processing file: {e}")
+        st.error(f"Processing Error: {e}")
+
+st.markdown('</div>', unsafe_allow_html=True) # End Main Content
