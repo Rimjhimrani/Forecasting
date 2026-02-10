@@ -139,7 +139,7 @@ with col_h1:
 with col_h2:
     # Attempting to load the image if present
     try:
-        st.image("forecast_image.png", use_column_width=True) 
+        st.image("Futuristic order for.png", use_column_width=True) 
     except:
         st.markdown('<div style="background: linear-gradient(135deg, #F0FDFF 0%, #CCF5FF 100%); height: 350px; border-radius: 30px; border: 1px solid #E0F2FE;"></div>', unsafe_allow_html=True)
 
