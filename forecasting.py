@@ -53,7 +53,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 AI-Powered Supply Chain Precision Forecast")
-st.info("Complete the steps below to generate a hybrid AI/Statistical demand forecast.")
 
 # --- STEP 1: SCOPE ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">1</div>Choose Forecasting Scope</div>', unsafe_allow_html=True)
@@ -66,23 +65,25 @@ with col2:
         sub_choice = st.radio("Specific Level", ["Model Wise", "Part No Wise"], horizontal=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 2 & 3: INTERVAL & HORIZON ---
+# --- STEP 2: TIMELINE (UPDATED WITH QUANTITY) ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">2</div>Timeline Configuration</div>', unsafe_allow_html=True)
-col_a, col_b = st.columns(2)
+col_a, col_b, col_c = st.columns(3)
 with col_a:
-    interval = st.selectbox("Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
+    interval = st.selectbox("Forecast Interval (Frequency)", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with col_b:
-    horizon_label = st.selectbox("Forecast Horizon (Future Length)", ["Day", "Week", "Month", "Quarter", "Year", "3 years", "5 years"], index=2)
+    horizon_unit = st.selectbox("Forecast Horizon Unit", ["Days", "Weeks", "Months", "Years"], index=2)
+with col_c:
+    horizon_value = st.number_input(f"Number of {horizon_unit} to Forecast", min_value=1, value=1, step=1)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 4: TECHNIQUES ---
+# --- STEP 3: TECHNIQUES ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">3</div>AI Strategy & Technique</div>', unsafe_allow_html=True)
-col_c, col_d = st.columns(2)
-with col_c:
+col_d, col_e = st.columns(2)
+with col_d:
     technique = st.selectbox("Select Statistical Strategy", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 
 tech_params = {}
-with col_d:
+with col_e:
     if technique == "Weightage Average":
         w_mode = st.radio("Weight Mode", ["Automated", "Manual"], horizontal=True)
         if w_mode == "Manual":
@@ -93,14 +94,14 @@ with col_d:
     elif technique == "Moving Average":
         tech_params['n'] = st.number_input("Lookback window (n)", 2, 30, 7)
     elif technique == "Ramp Up Evenly":
-        tech_params['ramp_factor'] = st.number_input("Growth/Ramp Factor", 1.0, 2.0, 1.05)
+        tech_params['ramp_factor'] = st.number_input("Growth/Ramp Factor (Multiplier per step)", 1.0, 2.0, 1.05)
     elif technique == "Exponentially":
         tech_params['alpha'] = st.slider("Smoothing Alpha", 0.01, 1.0, 0.3)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- STEP 5: UPLOAD ---
+# --- STEP 4: UPLOAD ---
 st.markdown('<div class="step-card"><div class="step-header"><div class="step-number">4</div>Data Ingestion</div>', unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Upload CSV or Excel (Date columns in wide format)", type=['xlsx', 'csv'])
+uploaded_file = st.file_uploader("Upload CSV or Excel (Wide format: Dates as Columns)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- BASELINE CALCULATION ---
@@ -125,7 +126,7 @@ def calculate_excel_baseline(demand, tech, params):
         return forecast
     return np.mean(demand)
 
-# --- EXECUTION ---
+# --- EXECUTION LOGIC ---
 if uploaded_file:
     try:
         raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
@@ -138,24 +139,28 @@ if uploaded_file:
         df_long['qty'] = pd.to_numeric(df_long['qty'], errors='coerce').fillna(0)
         df_long = df_long.sort_values('Date').dropna(subset=['Date'])
 
+        # Data Selection
         if main_choice == "Aggregate Wise":
             target_df = df_long.groupby('Date')['qty'].sum().reset_index()
             item_name = "Aggregate Sum"
         else:
-            selected = st.selectbox(f"Select {sub_choice}", df_long[id_col].unique())
+            selected_items = df_long[id_col].unique()
+            selected = st.selectbox(f"Select Target {sub_choice}", selected_items)
             target_df = df_long[df_long[id_col] == selected].copy()
             item_name = str(selected)
 
+        # Resampling based on Interval
         res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
+        # Forecast Run Button
         st.markdown('<div class="execute-btn">', unsafe_allow_html=True)
         if st.button("🚀 EXECUTE HYBRID AI FORECAST"):
             with st.spinner('Generating Insights...'):
                 history = target_df['qty'].tolist()
                 excel_base = calculate_excel_baseline(history, technique, tech_params)
                 
-                # ML Logic
+                # AI Modeling (Residual learning)
                 target_df['month'] = target_df['Date'].dt.month
                 target_df['dow'] = target_df['Date'].dt.dayofweek
                 target_df['diff'] = target_df['qty'] - excel_base
@@ -163,41 +168,65 @@ if uploaded_file:
                 model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
                 model.fit(target_df[['month', 'dow']], target_df['diff'])
                 
-                h_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365, "3 years": 1095, "5 years": 1825}
+                # --- NEW HORIZON CALCULATION ---
+                # Map units to Pandas Timedelta/Offsets
+                unit_map = {"Days": "D", "Weeks": "W", "Months": "M", "Years": "Y"}
                 last_date = target_df['Date'].max()
-                future_dates = pd.date_range(start=last_date, end=last_date + pd.Timedelta(days=h_map[horizon_label]), freq=res_map[interval])[1:]
                 
+                # Create future date range based on Interval frequency
+                # We extend the range until it covers the 'horizon_value' of 'horizon_unit'
+                if horizon_unit == "Days": end_date = last_date + pd.Timedelta(days=horizon_value)
+                elif horizon_unit == "Weeks": end_date = last_date + pd.Timedelta(weeks=horizon_value)
+                elif horizon_unit == "Months": end_date = last_date + pd.DateOffset(months=horizon_value)
+                else: end_date = last_date + pd.DateOffset(years=horizon_value)
+
+                future_dates = pd.date_range(start=last_date, end=end_date, freq=res_map[interval])[1:]
+                
+                # Safety check if range is too small
                 if len(future_dates) == 0:
-                    future_dates = pd.date_range(start=last_date, periods=2, freq=res_map[interval])[1:]
+                    future_dates = pd.date_range(start=last_date, periods=horizon_value + 1, freq=res_map[interval])[1:]
 
                 f_df = pd.DataFrame({'Date': future_dates})
                 f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
                 ai_wiggles = model.predict(f_df[['month', 'dow']])
                 
                 final_preds = np.maximum(excel_base + ai_wiggles, 0)
+                
+                # Apply Ramp Up growth factor if selected
                 if technique == "Ramp Up Evenly":
-                    final_preds = [p * (tech_params.get('ramp_factor', 1.05) ** i) for i, p in enumerate(final_preds, 1)]
+                    rf = tech_params.get('ramp_factor', 1.05)
+                    final_preds = [p * (rf ** i) for i, p in enumerate(final_preds, 1)]
 
-                # RESULTS UI
-                st.success("Forecast Generated Successfully!")
+                # --- RESULTS ---
+                st.success(f"Forecast for {len(future_dates)} steps generated!")
+                
                 m1, m2, m3 = st.columns(3)
-                m1.metric("Target Item", item_name)
+                m1.metric("Selected Scope", item_name)
                 m2.metric("Stat Baseline", f"{excel_base:.2f}")
-                m3.metric("Predicted Average", f"{np.mean(final_preds):.2f}")
+                m3.metric("Avg Forecast", f"{np.mean(final_preds):.2f}")
 
-                # Plot
+                # Graph
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['qty'], name="History", line=dict(color="#1e3d59", width=2)))
                 fig.add_trace(go.Scatter(x=future_dates, y=final_preds, name="AI Forecast", line=dict(color="#FF8C00", width=3, dash='dot')))
-                fig.update_layout(title=f"Trend Projection for {item_name}", template="plotly_white", hovermode="x unified", height=500)
+                fig.update_layout(
+                    title=f"Predictive Trend Analysis: {item_name}", 
+                    template="plotly_white", 
+                    hovermode="x unified",
+                    xaxis_title="Timeline",
+                    yaxis_title="Quantity"
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Table
-                st.subheader("📋 Forecasted Timeline")
-                date_fmt = '%d-%m-%Y %H:%M' if interval=="Hourly" else '%d-%m-%Y'
-                res_df = pd.DataFrame({"Date": future_dates.strftime(date_fmt), "Forecast Qty": np.round(final_preds, 2)})
-                st.dataframe(res_df, use_container_width=True, hide_index=True)
+                # Data View
+                with st.expander("View Detailed Forecast Data Table"):
+                    date_fmt = '%d-%m-%Y %H:%M' if interval=="Hourly" else '%d-%m-%Y'
+                    res_df = pd.DataFrame({
+                        "Forecast Date": future_dates.strftime(date_fmt), 
+                        "Predicted Qty": np.round(final_preds, 2)
+                    })
+                    st.dataframe(res_df, use_container_width=True, hide_index=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
-        st.error(f"Error processing file: {e}")
+        st.error(f"Processing Error: {e}")
