@@ -260,7 +260,7 @@ if uploaded_file:
             fig = go.Figure()
 
             fig.add_trace(go.Scatter(
-                x=target_df['Date'], y=target_df['qty'], name="Traded",
+                x=target_df['Date'], y=target_df['qty'], name="History",
                 mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'),
                 marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))
             ))
