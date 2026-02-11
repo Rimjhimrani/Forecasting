@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from xgboost import XGBRegressor
 import io
 
-# --- 1. PREMIUM ENTERPRISE UI CONFIG (Original Design) ---
+# --- 1. PREMIUM ENTERPRISE UI CONFIG ---
 st.set_page_config(page_title="AgiloForecast", layout="wide", initial_sidebar_state="collapsed")
 
 # Custom CSS for the original "SaaS Product" look
@@ -101,7 +101,6 @@ st.markdown("""
         border-radius: 20px;
         margin-top: 40px;
     }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -145,7 +144,11 @@ with c4:
         try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
         except: tech_params['weights'] = np.array([0.5, 0.5])
     elif technique == "Moving Average":
-        tech_params['n'] = st.number_input("Lookback Window", 2, 30, 7)
+        # --- NEW DYNAMIC LOGIC ---
+        unit_map = {"Hourly": "Hours", "Daily": "Days", "Weekly": "Weeks", "Monthly": "Months", "Quarterly": "Quarters", "Year": "Years"}
+        unit_label = unit_map.get(interval, "Periods")
+        tech_params['n'] = st.number_input(f"Lookback Window ({unit_label})", 2, 30, 7)
+        # -------------------------
     elif technique == "Ramp Up Evenly":
         tech_params['ramp_factor'] = st.number_input("Growth Coefficient", 1.0, 2.0, 1.05)
     elif technique == "Exponentially":
