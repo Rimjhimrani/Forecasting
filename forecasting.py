@@ -6,7 +6,7 @@ from xgboost import XGBRegressor
 import io
 
 # --- 1. PREMIUM ENTERPRISE UI CONFIG (Original Design) ---
-st.set_page_config(page_title="AI Supply Chain | Precision", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="AgiloForecast", layout="wide", initial_sidebar_state="collapsed")
 
 # Custom CSS for the original "SaaS Product" look
 st.markdown("""
