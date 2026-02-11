@@ -286,7 +286,7 @@ if uploaded_file:
             st.plotly_chart(fig, use_container_width=True)
 
             # --- AI WIGGLE CHART ---
-            st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
+            st.subheader("📉 AI Pattern Adjustment")
             fig_wig = go.Figure(go.Bar(x=future_dates, y=ai_residuals, name="AI Adjustment", marker_color="#00B0F0"))
             fig_wig.update_layout(template="plotly_white", height=300)
             st.plotly_chart(fig_wig, use_container_width=True)
