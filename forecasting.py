@@ -5,8 +5,8 @@ import plotly.graph_objects as go
 from xgboost import XGBRegressor
 import io
 
-# --- 1. PREMIUM ENTERPRISE UI CONFIG ---
-st.set_page_config(page_title="AgiloForecast", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. PREMIUM ENTERPRISE UI CONFIG (Original Design) ---
+st.set_page_config(page_title="AI Supply Chain | Precision", layout="wide", initial_sidebar_state="collapsed")
 
 # Custom CSS for the original "SaaS Product" look
 st.markdown("""
@@ -101,6 +101,7 @@ st.markdown("""
         border-radius: 20px;
         margin-top: 40px;
     }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -144,11 +145,7 @@ with c4:
         try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
         except: tech_params['weights'] = np.array([0.5, 0.5])
     elif technique == "Moving Average":
-        # --- NEW DYNAMIC LOGIC ---
-        unit_map = {"Hourly": "Hours", "Daily": "Days", "Weekly": "Weeks", "Monthly": "Months", "Quarterly": "Quarters", "Year": "Years"}
-        unit_label = unit_map.get(interval, "Periods")
-        tech_params['n'] = st.number_input(f"Lookback Window ({unit_label})", 2, 30, 7)
-        # -------------------------
+        tech_params['n'] = st.number_input("Lookback Window", 2, 30, 7)
     elif technique == "Ramp Up Evenly":
         tech_params['ramp_factor'] = st.number_input("Growth Coefficient", 1.0, 2.0, 1.05)
     elif technique == "Exponentially":
@@ -263,7 +260,7 @@ if uploaded_file:
             fig = go.Figure()
 
             fig.add_trace(go.Scatter(
-                x=target_df['Date'], y=target_df['qty'], name="History",
+                x=target_df['Date'], y=target_df['qty'], name="Traded",
                 mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'),
                 marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))
             ))
@@ -289,20 +286,20 @@ if uploaded_file:
             st.plotly_chart(fig, use_container_width=True)
 
             # --- AI WIGGLE CHART ---
-            st.subheader("📉 AI Pattern Adjustment")
+            st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
             fig_wig = go.Figure(go.Bar(x=future_dates, y=ai_residuals, name="AI Adjustment", marker_color="#00B0F0"))
             fig_wig.update_layout(template="plotly_white", height=300)
             st.plotly_chart(fig_wig, use_container_width=True)
 
             # DATA TABLE
             st.markdown("#### Demand Schedule")
-            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Predicted Forecast": predicted_calc_col, "Excel Calculated Forecast": excel_calc_col})
+            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Forecast": predicted_calc_col, "Statistical Baseline": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 res_df.to_excel(writer, index=False)
-            st.download_button("📥 EXPORT FORECAST REPORT", output.getvalue(), f"AI_Report_{item_name}.xlsx")
+            st.download_button("📥 EXPORT INTELLIGENCE REPORT", output.getvalue(), f"AI_Report_{item_name}.xlsx")
             st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
