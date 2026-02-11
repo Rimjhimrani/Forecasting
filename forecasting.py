@@ -124,17 +124,17 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 2 ---
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
-            '<div class="step-label">Step 02</div><div class="step-heading">Temporal Parameters</div>', unsafe_allow_html=True)
+            '<div class="step-label">Step 02</div><div class="step-heading">Set Parameters</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
-    interval = st.selectbox("Frequency", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
+    interval = st.selectbox("Forecast Horizon", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with c2:
     horizon_label = st.selectbox("Standard Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 3 ---
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
-            '<div class="step-label">Step 03</div><div class="step-heading">Modeling Strategy</div>', unsafe_allow_html=True)
+            '<div class="step-label">Step 03</div><div class="step-heading">Forecast Techniques</div>', unsafe_allow_html=True)
 c3, c4 = st.columns(2)
 with c3:
     technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
@@ -154,7 +154,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 4 ---
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
-            '<div class="step-label">Step 04</div><div class="step-heading">Data Ingestion</div>', unsafe_allow_html=True)
+            '<div class="step-label">Step 04</div><div class="step-heading">Data Upload</div>', unsafe_allow_html=True)
 uploaded_file = st.file_uploader("Drop Enterprise Data (CSV or Excel)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
