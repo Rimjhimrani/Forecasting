@@ -5,34 +5,30 @@ import plotly.graph_objects as go
 from xgboost import XGBRegressor
 import io
 
-# --- 1. PREMIUM ENTERPRISE UI CONFIG (Original Design) ---
+# --- 1. PREMIUM ENTERPRISE UI CONFIG ---
 st.set_page_config(page_title="AI Supply Chain | Precision", layout="wide", initial_sidebar_state="collapsed")
 
-# Custom CSS for the original "SaaS Product" look
+# Custom CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-    /* Global Typography */
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
         background-color: #FFFFFF;
         color: #111827;
     }
 
-    /* Remove Streamlit header/footer for a clean look */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Main Content Centering */
     .block-container {
         padding-top: 5rem;
         max-width: 900px;
         margin: 0 auto;
     }
 
-    /* Vertical Flow Design */
     .step-wrapper {
         position: relative;
         padding-left: 40px;
@@ -67,13 +63,11 @@ st.markdown("""
         margin-bottom: 20px;
     }
 
-    /* Input Styling */
     .stSelectbox, .stRadio, .stNumberInput, .stTextInput {
         background-color: #F9FAFB;
         border-radius: 8px;
     }
 
-    /* Premium Button */
     div.stButton > button {
         width: 100%;
         background-color: #111827 !important;
@@ -93,7 +87,6 @@ st.markdown("""
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     }
 
-    /* Result Insights Card */
     .insight-card {
         background-color: #F8FAFC;
         border: 1px solid #E2E8F0;
@@ -101,7 +94,6 @@ st.markdown("""
         border-radius: 20px;
         margin-top: 40px;
     }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -136,6 +128,18 @@ st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
             '<div class="step-label">Step 03</div><div class="step-heading">Forecast Techniques</div>', unsafe_allow_html=True)
 c3, c4 = st.columns(2)
+
+# Dynamic Unit Mapping for Moving Average Label
+unit_map = {
+    "Hourly": "Hours",
+    "Daily": "Days",
+    "Weekly": "Weeks",
+    "Monthly": "Months",
+    "Quarterly": "Quarters",
+    "Year": "Years"
+}
+current_unit = unit_map.get(interval, "Periods")
+
 with c3:
     technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 with c4:
@@ -145,7 +149,8 @@ with c4:
         try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
         except: tech_params['weights'] = np.array([0.5, 0.5])
     elif technique == "Moving Average":
-        tech_params['n'] = st.number_input("Lookback Window", 2, 30, 7)
+        # UPDATED: Label dynamically changes based on Step 2 selection
+        tech_params['n'] = st.number_input(f"Lookback Window ({current_unit})", min_value=1, max_value=100, value=7)
     elif technique == "Ramp Up Evenly":
         tech_params['ramp_factor'] = st.number_input("Growth Coefficient", 1.0, 2.0, 1.05)
     elif technique == "Exponentially":
@@ -186,7 +191,6 @@ if uploaded_file:
         raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         raw.columns = raw.columns.astype(str).str.strip()
         
-        # LOGIC ADJUSTMENT: PART NO WISE (Model index 0, Part index 1)
         model_col = raw.columns[0]
         part_no_col = raw.columns[1]
         
@@ -206,7 +210,6 @@ if uploaded_file:
                 target_df = df_long[df_long[model_col] == selected].groupby('Date')['qty'].sum().reset_index()
                 item_name = str(selected)
             else:
-                # Part No Wise Filtering Logic
                 selected_model = st.selectbox("Select Model", df_long[model_col].unique())
                 selected_part = st.selectbox("Select Part No", df_long[df_long[model_col] == selected_model][part_no_col].unique())
                 target_df = df_long[(df_long[model_col] == selected_model) & (df_long[part_no_col] == selected_part)].copy()
@@ -221,13 +224,11 @@ if uploaded_file:
         if st.session_state.get('run_analysis', False):
             st.markdown('<div class="insight-card">', unsafe_allow_html=True)
             
-            # --- CUSTOMER ADJUSTMENT PANEL ---
             st.markdown("### 🛠 Operational Viewport")
             cx1, cx2 = st.columns(2)
             with cx1: dynamic_val = st.number_input("Forecast Length", min_value=1, value=15)
             with cx2: dynamic_unit = st.selectbox("View Period", ["Days", "Weeks", "Months", "Original Selection"])
             
-            # Calculations
             history = target_df['qty'].tolist()
             excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
             target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
@@ -255,7 +256,6 @@ if uploaded_file:
                 excel_calc_col.append(round(base, 2))
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
-            # --- TREND GRAPH ---
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
@@ -285,13 +285,11 @@ if uploaded_file:
             fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02))
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- AI WIGGLE CHART ---
             st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
             fig_wig = go.Figure(go.Bar(x=future_dates, y=ai_residuals, name="AI Adjustment", marker_color="#00B0F0"))
             fig_wig.update_layout(template="plotly_white", height=300)
             st.plotly_chart(fig_wig, use_container_width=True)
 
-            # DATA TABLE
             st.markdown("#### Demand Schedule")
             res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Forecast": predicted_calc_col, "Statistical Baseline": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
