@@ -121,7 +121,7 @@ c1, c2 = st.columns(2)
 with c1:
     interval = st.selectbox("Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with c2:
-    horizon_label = st.selectbox("Standard Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
+    horizon_label = st.selectbox("Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 3 ---
