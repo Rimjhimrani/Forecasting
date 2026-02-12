@@ -136,7 +136,6 @@ current_unit = unit_map.get(interval, "Periods")
 with c3:
     technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 with c4:
-    tech_params = {}
     if technique == "Weightage Average":
         st.session_state.weight_mode = st.radio(
             "Weight Configuration",
@@ -251,6 +250,12 @@ if uploaded_file:
             with cx2: dynamic_unit = st.selectbox("View Period", ["Days", "Weeks", "Months", "Original Selection"])
             
             history = target_df['qty'].tolist()
+            tech_params = {
+                "weights": st.session_state.get("weights"),
+                "n": tech_params.get("n"),
+                "alpha": tech_params.get("alpha"),
+                "ramp_factor": tech_params.get("ramp_factor")
+            }
             excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
             target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
             target_df['diff'] = target_df['qty'] - excel_base_scalar
