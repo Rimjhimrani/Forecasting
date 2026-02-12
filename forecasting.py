@@ -136,6 +136,7 @@ current_unit = unit_map.get(interval, "Periods")
 with c3:
     technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 with c4:
+    tech_params = {}
     if technique == "Weightage Average":
         st.session_state.weight_mode = st.radio(
             "Weight Configuration",
@@ -157,6 +158,7 @@ with c4:
                     st.warning("⚠️ Weights should sum to 1. Using last valid values.")
             except:
                 st.warning("⚠️ Invalid format. Example: 0.2,0.3,0.5")
+                
         else:
             w_lookback = st.number_input(
                 f"Lookback for Even Distribution ({current_unit})",
