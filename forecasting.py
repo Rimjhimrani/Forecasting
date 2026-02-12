@@ -119,9 +119,9 @@ st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
             '<div class="step-label">Step 02</div><div class="step-heading">Set Parameters</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
-    interval = st.selectbox("Forecast Interval", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
+    interval = st.selectbox("Forecast Horizon", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with c2:
-    horizon_label = st.selectbox("Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
+    horizon_label = st.selectbox("Standard Forecast Horizon", ["Day", "Week", "Month", "Quarter", "Year"], index=2)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 3 ---
@@ -129,15 +129,8 @@ st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
             '<div class="step-label">Step 03</div><div class="step-heading">Forecast Techniques</div>', unsafe_allow_html=True)
 c3, c4 = st.columns(2)
 
-# Dynamic Unit Mapping for Moving Average Label
-unit_map = {
-    "Hourly": "Hours",
-    "Daily": "Days",
-    "Weekly": "Weeks",
-    "Monthly": "Months",
-    "Quarterly": "Quarters",
-    "Year": "Years"
-}
+# Dynamic Unit Mapping for UI Labels
+unit_map = {"Hourly": "Hours", "Daily": "Days", "Weekly": "Weeks", "Monthly": "Months", "Quarterly": "Quarters", "Year": "Years"}
 current_unit = unit_map.get(interval, "Periods")
 
 with c3:
@@ -145,11 +138,18 @@ with c3:
 with c4:
     tech_params = {}
     if technique == "Weightage Average":
-        w_in = st.text_input("Manual Weight Ratios", "0.3, 0.7")
-        try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
-        except: tech_params['weights'] = np.array([0.5, 0.5])
+        # UPDATED: Added choice for Manual or Automated weights
+        w_mode = st.radio("Weight Configuration", ["Manual Entry", "Automated (Evenly)"], horizontal=True)
+        if w_mode == "Manual Entry":
+            w_in = st.text_input("Manual Ratios (comma separated)", "0.3, 0.7")
+            try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
+            except: tech_params['weights'] = np.array([0.5, 0.5])
+        else:
+            w_lookback = st.number_input(f"Lookback for Even Distribution ({current_unit})", 1, 100, 3)
+            # Create even weights (e.g., if lookback is 4, weights are [0.25, 0.25, 0.25, 0.25])
+            tech_params['weights'] = np.full(w_lookback, 1.0 / w_lookback)
+            
     elif technique == "Moving Average":
-        # UPDATED: Label dynamically changes based on Step 2 selection
         tech_params['n'] = st.number_input(f"Lookback Window ({current_unit})", min_value=1, max_value=100, value=7)
     elif technique == "Ramp Up Evenly":
         tech_params['ramp_factor'] = st.number_input("Growth Coefficient", 1.0, 2.0, 1.05)
@@ -171,8 +171,9 @@ def calculate_excel_baseline(demand, tech, params):
         n = params.get('n', 7)
         return np.mean(demand[-n:]) if len(demand) >= n else np.mean(demand)
     elif tech == "Weightage Average":
-        w = params.get('weights', np.array([0.33, 0.33, 0.34]))
+        w = params.get('weights', np.array([0.5, 0.5]))
         n = len(w)
+        # Apply weighted sum to the last 'n' periods
         return np.dot(demand[-n:], w) / np.sum(w) if len(demand) >= n else np.mean(demand)
     elif tech == "Ramp Up Evenly":
         d_slice = demand[-7:] 
