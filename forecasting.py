@@ -140,38 +140,33 @@ with c3:
     technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 with c4:
     tech_params = {}
-
-if technique == "Weightage Average":
-
-    w_mode = st.radio(
-        "Weight Configuration",
-        ["Manual Entry", "Automated (Evenly)"],
-        horizontal=True,
-        key="wa_mode"
-    )
-
-    if w_mode == "Manual Entry":
-        w_in = st.text_input(
-            "Manual Ratios (comma separated)",
-            value=st.session_state.get("wa_input", "0.3,0.7"),
-            key="wa_input"
+    if technique == "Weightage Average":
+        w_mode = st.radio(
+            "Weight Configuration",
+            ["Manual Entry", "Automated (Evenly)"],
+            horizontal=True,
+            key="wa_mode"
         )
-        try:
-            weights = np.array([float(x.strip()) for x in w_in.split(",")])
-            st.session_state.wa_weights = weights
-        except:
-            st.warning("Invalid format. Example: 0.2,0.3,0.5")
-
-    else:
-        w_lookback = st.number_input(
-            f"Lookback for Even Distribution ({current_unit})",
-            1, 100, 3,
-            key="wa_lookback"
-        )
-        st.session_state.wa_weights = np.ones(w_lookback) / w_lookback
-
-    # Inject weights into tech_params
-    tech_params["weights"] = st.session_state.wa_weights
+        if w_mode == "Manual Entry":
+            w_in = st.text_input(
+                "Manual Ratios (comma separated)",
+                value=st.session_state.get("wa_input", "0.3,0.7"),
+                key="wa_input"
+            )
+            try:
+                weights = np.array([float(x.strip()) for x in w_in.split(",")])
+                st.session_state.wa_weights = weights
+            except:
+                st.warning("Invalid format. Example: 0.2,0.3,0.5")
+        else:
+            w_lookback = st.number_input(
+                f"Lookback for Even Distribution ({current_unit})",
+                1, 100, 3,
+                key="wa_lookback"
+            )
+            st.session_state.wa_weights = np.ones(w_lookback) / w_lookback
+        # Inject weights into tech_param
+        tech_params["weights"] = st.session_state.wa_weights
             
     elif technique == "Moving Average":
         tech_params['n'] = st.number_input(f"Lookback Window ({current_unit})", min_value=1, max_value=100, value=7)
