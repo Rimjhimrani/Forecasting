@@ -5,6 +5,9 @@ import plotly.graph_objects as go
 from xgboost import XGBRegressor
 import io
 
+if "wa_weights" not in st.session_state:
+    st.session_state.wa_weights = None
+
 # --- 1. PREMIUM ENTERPRISE UI CONFIG ---
 st.set_page_config(page_title="AI Supply Chain | Precision", layout="wide", initial_sidebar_state="collapsed")
 
@@ -137,17 +140,38 @@ with c3:
     technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 with c4:
     tech_params = {}
-    if technique == "Weightage Average":
-        # UPDATED: Added choice for Manual or Automated weights
-        w_mode = st.radio("Weight Configuration", ["Manual Entry", "Automated (Evenly)"], horizontal=True)
-        if w_mode == "Manual Entry":
-            w_in = st.text_input("Manual Ratios (comma separated)", "0.3, 0.7")
-            try: tech_params['weights'] = np.array([float(x.strip()) for x in w_in.split(',')])
-            except: tech_params['weights'] = np.array([0.5, 0.5])
-        else:
-            w_lookback = st.number_input(f"Lookback for Even Distribution ({current_unit})", 1, 100, 3)
-            # Create even weights (e.g., if lookback is 4, weights are [0.25, 0.25, 0.25, 0.25])
-            tech_params['weights'] = np.full(w_lookback, 1.0 / w_lookback)
+
+if technique == "Weightage Average":
+
+    w_mode = st.radio(
+        "Weight Configuration",
+        ["Manual Entry", "Automated (Evenly)"],
+        horizontal=True,
+        key="wa_mode"
+    )
+
+    if w_mode == "Manual Entry":
+        w_in = st.text_input(
+            "Manual Ratios (comma separated)",
+            value=st.session_state.get("wa_input", "0.3,0.7"),
+            key="wa_input"
+        )
+        try:
+            weights = np.array([float(x.strip()) for x in w_in.split(",")])
+            st.session_state.wa_weights = weights
+        except:
+            st.warning("Invalid format. Example: 0.2,0.3,0.5")
+
+    else:
+        w_lookback = st.number_input(
+            f"Lookback for Even Distribution ({current_unit})",
+            1, 100, 3,
+            key="wa_lookback"
+        )
+        st.session_state.wa_weights = np.ones(w_lookback) / w_lookback
+
+    # Inject weights into tech_params
+    tech_params["weights"] = st.session_state.wa_weights
             
     elif technique == "Moving Average":
         tech_params['n'] = st.number_input(f"Lookback Window ({current_unit})", min_value=1, max_value=100, value=7)
