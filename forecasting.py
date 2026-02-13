@@ -140,28 +140,26 @@ with c3:
     technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 with c4:
     tech_params = {}
-    # default lookback if none is applicable
-    current_lookback_window = 30 
+    graph_lookback = 30 # Default if history is long
     
     if technique == "Weightage Average":
         w_mode = st.radio("Weight Configuration", ["Manual Entry", "Automated (Evenly)"], horizontal=True, key="wa_mode")
         if w_mode == "Manual Entry":
-            w_in = st.text_input("Manual Ratios (comma separated)", value="0.3,0.7")
+            w_in = st.text_input("Manual Ratios (comma separated)", value="0.3,0.7", key="wa_input")
             try:
                 weights = np.array([float(x.strip()) for x in w_in.split(",")])
-                tech_params["weights"] = weights
-                current_lookback_window = len(weights)
+                st.session_state.wa_weights = weights
             except:
-                tech_params["weights"] = np.array([0.5, 0.5])
-                current_lookback_window = 2
+                st.session_state.wa_weights = np.array([0.5, 0.5])
         else:
-            w_lookback = st.number_input(f"Lookback ({current_unit})", 1, 100, 3)
-            tech_params["weights"] = np.ones(w_lookback) / w_lookback
-            current_lookback_window = w_lookback
+            w_lookback = st.number_input(f"Lookback ({current_unit})", 1, 100, 3, key="wa_lookback")
+            st.session_state.wa_weights = np.ones(w_lookback) / w_lookback
+        tech_params["weights"] = st.session_state.wa_weights
+        graph_lookback = len(st.session_state.wa_weights)
             
     elif technique == "Moving Average":
-        tech_params['n'] = st.number_input(f"Lookback Window ({current_unit})", min_value=1, max_value=100, value=7)
-        current_lookback_window = tech_params['n']
+        tech_params['n'] = st.number_input(f"Lookback Window ({current_unit})", 1, 100, 7)
+        graph_lookback = tech_params['n']
     elif technique == "Ramp Up Evenly":
         tech_params['ramp_factor'] = st.number_input("Growth Coefficient", 1.0, 2.0, 1.05)
     elif technique == "Exponentially":
@@ -174,21 +172,15 @@ st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
 uploaded_file = st.file_uploader("Drop Enterprise Data (CSV or Excel)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- LOGIC FUNCTIONS ---
-def get_baseline_series(df, tech, params):
+# --- LOGIC ---
+def get_rolling_baseline(df, tech, params):
     series = df['qty']
-    if tech == "Historical Average":
-        return series.expanding().mean()
-    elif tech == "Moving Average":
-        return series.rolling(window=params.get('n', 7), min_periods=1).mean()
+    if tech == "Historical Average": return series.expanding().mean()
+    elif tech == "Moving Average": return series.rolling(window=params.get('n', 7), min_periods=1).mean()
     elif tech == "Weightage Average":
         w = params.get('weights', np.array([0.5, 0.5]))
-        def apply_w(x):
-            if len(x) < len(w): return np.mean(x)
-            return np.dot(x, w) / np.sum(w)
-        return series.rolling(window=len(w)).apply(apply_w, raw=True).fillna(series.expanding().mean())
-    elif tech == "Exponentially":
-        return series.ewm(alpha=params.get('alpha', 0.3)).mean()
+        return series.rolling(window=len(w)).apply(lambda x: np.dot(x, w)/np.sum(w) if len(x)==len(w) else np.mean(x), raw=True).fillna(series.expanding().mean())
+    elif tech == "Exponentially": return series.ewm(alpha=params.get('alpha', 0.3)).mean()
     return series.expanding().mean()
 
 # --- EXECUTION ---
@@ -196,7 +188,6 @@ if uploaded_file:
     try:
         raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         raw.columns = raw.columns.astype(str).str.strip()
-        
         model_col, part_no_col = raw.columns[0], raw.columns[1]
         date_cols = [c for c in raw.columns[4:] if pd.notnull(pd.to_datetime(c, errors='coerce', dayfirst=True))]
         
@@ -207,10 +198,10 @@ if uploaded_file:
 
         if main_choice == "Aggregate Wise":
             target_df = df_long.groupby('Date')['qty'].sum().reset_index()
-            item_name = "System Aggregate"
+            item_name = "System-wide Aggregate"
         else:
             if sub_choice == "Model Wise":
-                selected = st.selectbox("🎯 Target Model", df_long[model_col].unique())
+                selected = st.selectbox("🎯 Identity Analysis Target", df_long[model_col].unique())
                 target_df = df_long[df_long[model_col] == selected].groupby('Date')['qty'].sum().reset_index()
                 item_name = str(selected)
             else:
@@ -227,9 +218,13 @@ if uploaded_file:
 
         if st.session_state.get('run_analysis', False):
             st.markdown('<div class="insight-card">', unsafe_allow_html=True)
+            st.markdown("### 🛠 Operational Viewport")
+            cx1, cx2 = st.columns(2)
+            with cx1: dynamic_val = st.number_input("Forecast Length", min_value=1, value=15)
+            with cx2: dynamic_unit = st.selectbox("View Period", ["Days", "Weeks", "Months", "Original Selection"])
             
-            # AI Logic
-            target_df['baseline'] = get_baseline_series(target_df, technique, tech_params)
+            # Calculations
+            target_df['baseline'] = get_rolling_baseline(target_df, technique, tech_params)
             target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
             target_df['diff'] = target_df['qty'] - target_df['baseline']
             
@@ -237,63 +232,50 @@ if uploaded_file:
             model.fit(target_df[['month', 'dow']], target_df['diff'])
             
             last_date, last_qty = target_df['Date'].max(), target_df['qty'].iloc[-1]
-            last_baseline = target_df['baseline'].iloc[-1]
+            last_base = target_df['baseline'].iloc[-1]
             
-            # Forecast Settings
-            f_len = st.number_input("Forecast Points", 1, 100, 15)
-            future_dates = pd.date_range(start=last_date, periods=f_len+1, freq=res_map[interval])[1:]
-            
+            future_dates = pd.date_range(start=last_date, periods=dynamic_val+1, freq=res_map[interval])[1:]
             f_df = pd.DataFrame({'Date': future_dates, 'month': future_dates.month, 'dow': future_dates.dayofweek})
-            ai_res = model.predict(f_df[['month', 'dow']])
+            ai_residuals = model.predict(f_df[['month', 'dow']])
             
-            excel_fc, pred_fc = [], []
-            for i, res in enumerate(ai_res, 1):
-                base = last_baseline * (tech_params.get('ramp_factor', 1.05) ** i) if technique == "Ramp Up Evenly" else last_baseline
-                excel_fc.append(round(base, 2))
-                pred_fc.append(round(max(base + res, 0), 2))
+            excel_calc_col, predicted_calc_col = [], []
+            for i, res in enumerate(ai_residuals, 1):
+                base = last_base * (tech_params.get('ramp_factor', 1.05) ** i) if technique == "Ramp Up Evenly" else last_base
+                excel_calc_col.append(round(base, 2))
+                predicted_calc_col.append(round(max(base + res, 0), 2))
 
-            # --- FILTERED GRAPH VIEW ---
-            # We show ONLY the last N points based on user lookback
-            chart_hist = target_df.tail(current_lookback_window)
+            # Filter History for Graph
+            chart_hist = target_df.tail(graph_lookback)
 
-            st.subheader(f"📈 Predictive Analysis: {item_name} (Lookback: {current_lookback_window} {current_unit})")
+            # --- PLOT 1: TREND ---
+            st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
-
-            # Trace 1: Historical Data (Limited to Lookback Window)
-            fig.add_trace(go.Scatter(
-                x=chart_hist['Date'], y=chart_hist['qty'], name=f"History ({current_lookback_window} {current_unit})",
-                mode='lines+markers', line=dict(color="#1a8cff", width=2.5)
-            ))
-
-            # Connections to last point
+            # Historical (Windowed)
+            fig.add_trace(go.Scatter(x=chart_hist['Date'], y=chart_hist['qty'], name="Traded", mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'), marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))))
+            
+            # Forecast Connections
             f_dates_conn = [last_date] + list(future_dates)
-            f_stat_conn = [last_baseline] + excel_fc
-            f_ai_conn = [last_qty] + pred_fc
+            fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_base]+excel_calc_col, name="Excel Calculated Forecast", mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot', shape='spline'), marker=dict(size=4, color="#999999")))
+            fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty]+predicted_calc_col, name="AI Predicted Forecast", mode='lines+markers', line=dict(color="#ffcc00", width=2.5, dash='dash', shape='spline'), marker=dict(size=5, color="white", line=dict(color="#ffcc00", width=1.5))))
 
-            # Trace 2: Future Baseline
-            fig.add_trace(go.Scatter(
-                x=f_dates_conn, y=f_stat_conn, name="Statistical Baseline",
-                mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot')
-            ))
-
-            # Trace 3: AI Prediction
-            fig.add_trace(go.Scatter(
-                x=f_dates_conn, y=f_ai_conn, name="AI Predicted Forecast",
-                mode='lines+markers', line=dict(color="#ffcc00", width=3)
-            ))
-
-            fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", y=1.05))
+            fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02))
             st.plotly_chart(fig, use_container_width=True)
 
-            # Demand Schedule
+            # --- PLOT 2: WIGGLES ---
+            st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
+            fig_wig = go.Figure(go.Bar(x=future_dates, y=ai_residuals, name="AI Adjustment", marker_color="#00B0F0"))
+            fig_wig.update_layout(template="plotly_white", height=300)
+            st.plotly_chart(fig_wig, use_container_width=True)
+
+            # --- TABLE & EXPORT ---
             st.markdown("#### Demand Schedule")
-            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Forecast": pred_fc, "Stat Baseline": excel_fc})
+            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Forecast": predicted_calc_col, "Statistical Baseline": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer: res_df.to_excel(writer, index=False)
-            st.download_button("📥 EXPORT REPORT", output.getvalue(), f"AI_Report_{item_name}.xlsx")
+            st.download_button("📥 EXPORT INTELLIGENCE REPORT", output.getvalue(), f"AI_Report_{item_name}.xlsx")
             st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Critical System Error: {e}")
