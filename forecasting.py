@@ -182,28 +182,28 @@ st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
 uploaded_file = st.file_uploader("Drop Enterprise Data (CSV or Excel)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- CORE LOGIC ---
-def calculate_excel_baseline(demand, tech, params):
-    if len(demand) == 0: return 0
-    if tech == "Historical Average": return np.mean(demand)
+# --- UPDATED LOGIC: ROLLING HISTORICAL BASELINE ---
+def calculate_historical_baseline_series(df, tech, params):
+    """Calculates a baseline value for EVERY point in history to ensure full visualization."""
+    series = df['qty']
+    if tech == "Historical Average":
+        return series.expanding().mean()
     elif tech == "Moving Average":
         n = params.get('n', 7)
-        return np.mean(demand[-n:]) if len(demand) >= n else np.mean(demand)
+        return series.rolling(window=n, min_periods=1).mean()
     elif tech == "Weightage Average":
         w = params.get('weights', np.array([0.5, 0.5]))
-        n = len(w)
-        # Apply weighted sum to the last 'n' periods
-        return np.dot(demand[-n:], w) / np.sum(w) if len(demand) >= n else np.mean(demand)
+        def apply_weights(x):
+            if len(x) < len(w): return np.mean(x)
+            return np.dot(x, w) / np.sum(w)
+        return series.rolling(window=len(w)).apply(apply_weights, raw=True).fillna(series.expanding().mean())
     elif tech == "Ramp Up Evenly":
-        d_slice = demand[-7:] 
-        weights = np.arange(1, len(d_slice) + 1)
-        return np.dot(d_slice, weights) / weights.sum()
+        # For history, use a 7-period rolling window to show trend
+        return series.rolling(window=7, min_periods=1).mean()
     elif tech == "Exponentially":
         alpha = params.get('alpha', 0.3)
-        forecast = demand[0]
-        for d in demand[1:]: forecast = alpha * d + (1 - alpha) * forecast
-        return forecast
-    return np.mean(demand)
+        return series.ewm(alpha=alpha).mean()
+    return series.expanding().mean()
 
 # --- EXECUTION ---
 if uploaded_file:
@@ -249,15 +249,20 @@ if uploaded_file:
             with cx1: dynamic_val = st.number_input("Forecast Length", min_value=1, value=15)
             with cx2: dynamic_unit = st.selectbox("View Period", ["Days", "Weeks", "Months", "Original Selection"])
             
-            history = target_df['qty'].tolist()
-            excel_base_scalar = calculate_excel_baseline(history, technique, tech_params)
+            # 1. CALCULATE HISTORICAL BASELINE (Entire history)
+            target_df['baseline'] = calculate_historical_baseline_series(target_df, technique, tech_params)
+            
+            # 2. TRAIN AI MODEL ON RESIDUALS (Actual - Baseline)
             target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
-            target_df['diff'] = target_df['qty'] - excel_base_scalar
+            target_df['diff'] = target_df['qty'] - target_df['baseline']
             
             model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
             model.fit(target_df[['month', 'dow']], target_df['diff'])
             
+            # 3. SETUP FUTURE DATES
             last_date, last_qty = target_df['Date'].max(), target_df['qty'].iloc[-1]
+            last_baseline = target_df['baseline'].iloc[-1]
+            
             if dynamic_unit == "Original Selection":
                 h_map = {"Day": 1, "Week": 7, "Month": 30, "Quarter": 90, "Year": 365}
                 end_date = last_date + pd.Timedelta(days=h_map[horizon_label])
@@ -270,27 +275,31 @@ if uploaded_file:
             f_df['month'], f_df['dow'] = f_df['Date'].dt.month, f_df['Date'].dt.dayofweek
             ai_residuals = model.predict(f_df[['month', 'dow']])
             
+            # 4. CALCULATE FUTURE BASELINES AND AI PREDICTIONS
             excel_calc_col, predicted_calc_col = [], []
             for i, res in enumerate(ai_residuals, 1):
-                base = excel_base_scalar * (tech_params.get('ramp_factor', 1.05) ** i) if technique == "Ramp Up Evenly" else excel_base_scalar
+                base = last_baseline * (tech_params.get('ramp_factor', 1.05) ** i) if technique == "Ramp Up Evenly" else last_baseline
                 excel_calc_col.append(round(base, 2))
                 predicted_calc_col.append(round(max(base + res, 0), 2))
 
+            # --- PLOTTING ---
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
 
+            # Plot FULL History of Traded Quantities
             fig.add_trace(go.Scatter(
-                x=target_df['Date'], y=target_df['qty'], name="Traded",
+                x=target_df['Date'], y=target_df['qty'], name="Traded (Full History)",
                 mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'),
                 marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))
             ))
 
+            # Connect Future Predictions to Last Historical Point
             f_dates_conn = [last_date] + list(future_dates)
-            f_excel_conn = [last_qty] + list(excel_calc_col)
+            f_excel_conn = [last_baseline] + list(excel_calc_col)
             f_pred_conn = [last_qty] + list(predicted_calc_col)
 
             fig.add_trace(go.Scatter(
-                x=f_dates_conn, y=f_excel_conn, name="Excel Calculated Forecast",
+                x=f_dates_conn, y=f_excel_conn, name="Statistical Baseline Forecast",
                 mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot', shape='spline'),
                 marker=dict(size=4, color="#999999")
             ))
