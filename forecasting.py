@@ -301,7 +301,7 @@ if uploaded_file:
             st.plotly_chart(fig_wig, use_container_width=True)
 
             st.markdown("#### Demand Schedule")
-            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Forecast": predicted_calc_col, "Statistical Baseline": excel_calc_col})
+            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Predicted Forecast": predicted_calc_col, "Excel Calculated Forecast": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
             output = io.BytesIO()
