@@ -282,7 +282,7 @@ if uploaded_file:
 
             st.subheader(f"📈 Predictive Trend Analysis: {item_name}")
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=graph_history['Date'], y=graph_history['qty'], name="Traded", mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'), marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))))
+            fig.add_trace(go.Scatter(x=graph_history['Date'], y=graph_history['qty'], name="History", mode='lines+markers', line=dict(color="#1a8cff", width=2.5, shape='spline'), marker=dict(size=6, color="white", line=dict(color="#1a8cff", width=1.5))))
             
             f_dates_conn = [last_date] + list(future_dates)
             fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty] + excel_calc_col, name="Excel Calculated Forecast", mode='lines+markers', line=dict(color="#999999", width=1.2, dash='dot', shape='spline'), marker=dict(size=4, color="#999999")))
@@ -292,18 +292,18 @@ if uploaded_file:
             fig.update_layout(template="plotly_white", hovermode="x unified", height=500, legend=dict(orientation="h", yanchor="bottom", y=1.02))
             st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader("📉 AI Pattern Adjustment (The Wiggles)")
+            st.subheader("📉 AI Pattern Adjustment")
             fig_wig = go.Figure(go.Bar(x=future_dates, y=ai_residuals, name="AI Adjustment", marker_color="#00B0F0"))
             fig_wig.update_layout(template="plotly_white", height=300)
             st.plotly_chart(fig_wig, use_container_width=True)
 
             st.markdown("#### Demand Schedule")
-            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Forecast": predicted_calc_col, "Statistical Baseline": excel_calc_col})
+            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Predicted Forecast": predicted_calc_col, "Excel Calculated Forecast": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer: res_df.to_excel(writer, index=False)
-            st.download_button("📥 EXPORT INTELLIGENCE REPORT", output.getvalue(), f"AI_Report_{item_name}.xlsx")
+            st.download_button("📥 EXPORT FORECAST REPORT", output.getvalue(), f"AI_Report_{item_name}.xlsx")
             st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
