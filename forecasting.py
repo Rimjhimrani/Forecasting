@@ -57,14 +57,28 @@ with c3:
 
 # Logic to calculate total periods based on Interval and Horizon
 def calculate_total_periods(inv, h_unit, h_val):
-    # Map everything to a base frequency (e.g., Days) to find the ratio
-    days_map = {"Hourly": 1/24, "Daily": 1, "Weekly": 7, "Monthly": 30, "Quarterly": 91, "Year": 365}
-    horizon_days_map = {"Day(s)": 1, "Week(s)": 7, "Month(s)": 30, "Quarter(s)": 91, "Year(s)": 365}
-    
-    total_days_needed = horizon_days_map[h_unit] * h_val
-    interval_days = days_map[inv]
-    
-    periods = int(np.ceil(total_days_needed / interval_days))
+    # Convert everything to days (single source of truth)
+    interval_to_days = {
+        "Hourly": 1/24,
+        "Daily": 1,
+        "Weekly": 7,
+        "Monthly": 30,
+        "Quarterly": 91,
+        "Year": 365
+    }
+
+    horizon_to_days = {
+        "Day(s)": 1,
+        "Week(s)": 7,
+        "Month(s)": 30,
+        "Quarter(s)": 91,
+        "Year(s)": 365
+    }
+
+    total_days = horizon_to_days[horizon_unit] * horizon_val
+    interval_days = interval_to_days[interval]
+
+    periods = int(np.ceil(total_days / interval_days))
     return periods
 
 total_forecast_periods = calculate_total_periods(interval, horizon_unit, horizon_val)
