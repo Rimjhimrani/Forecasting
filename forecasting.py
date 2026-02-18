@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 from xgboost import XGBRegressor
 import io
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 if "wa_weights" not in st.session_state:
     st.session_state.wa_weights = None
@@ -36,12 +36,9 @@ st.markdown('<div style="text-align: center; margin-bottom: 80px;">'
 def get_display_labels(dates, interval, is_forecast=False):
     dates_ser = pd.Series(dates)
     if is_forecast:
-        if interval == "Daily": 
-            return dates_ser.dt.strftime('%d-%m-%Y').tolist()
-        if interval == "Weekly": 
-            return [f"Week {i+1}" for i in range(len(dates_ser))]
-        if interval == "Hourly": 
-            return [f"Hr {i+1}" for i in range(len(dates_ser))]
+        if interval == "Daily": return dates_ser.dt.strftime('%d-%m-%Y').tolist()
+        if interval == "Weekly": return [f"Week {i+1}" for i in range(len(dates_ser))]
+        if interval == "Hourly": return [f"Hr {i+1}" for i in range(len(dates_ser))]
     
     if interval == "Monthly": return dates_ser.dt.strftime('%b %y').tolist()
     if interval == "Quarterly": return [f"Q{d.quarter}-{str(d.year)[2:]}" for d in dates_ser]
@@ -88,18 +85,18 @@ def calculate_total_periods(inv, h_unit, h_val):
     return int(np.ceil((horizon_to_days[h_unit] * h_val) / interval_to_days[inv]))
 
 total_forecast_periods = calculate_total_periods(interval, horizon_unit, horizon_val)
-st.caption(f"💡 System will generate **{total_forecast_periods}** {interval} data points.")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 3: TECHNIQUES ---
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
             '<div class="step-label">Step 03</div><div class="step-heading">Forecast Techniques</div>', unsafe_allow_html=True)
 c4, c5 = st.columns(2)
-unit_map = {"Hourly": "Hours", "Daily": "Days", "Weekly": "Weeks", "Monthly": "Months", "Quarterly": "Quarters", "Year": "Years"}
-current_unit = unit_map.get(interval, "Periods")
+current_unit = interval
 
 with c4:
-    technique = st.selectbox("Forecast Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
+    technique = st.selectbox("Baseline Algorithm", 
+                             ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"],
+                             help="Historical Avg: Mean of all points. Moving Avg: Average of recent window. Weightage: Custom weights for recent data. Ramp Up: Detects growth trend. Exponentially: Weights recent demand heavily using Alpha.")
 with c5:
     tech_params = {}
     if technique == "Weightage Average":
@@ -166,10 +163,8 @@ def calculate_excel_baseline(demand, tech, params, periods=1):
         forecast = demand[0]
         for d in demand[1:]: forecast = alpha * d + (1 - alpha) * forecast
         res = [forecast] * periods
-    else:
-        res = [np.mean(demand)] * periods
+    else: res = [np.mean(demand)] * periods
     
-    # ROUND UP BASELINE
     return [int(np.ceil(x)) for x in res]
 
 # --- EXECUTION ---
@@ -207,49 +202,83 @@ if uploaded_file:
             target_df = target_df[target_df['Date'] >= cutoff].reset_index(drop=True)
 
         if st.button("RUN PREDICTIVE ANALYSIS"):
+            history = target_df['qty'].tolist()
+            
+            # --- VALIDATION 1: MIN HISTORY ---
+            if len(history) < 3:
+                st.warning("Insufficient historical data (minimum 3 periods required) for reliable forecasting.")
+                st.stop()
+
             st.markdown('<div class="insight-card">', unsafe_allow_html=True)
             
             periods_to_forecast = total_forecast_periods
             last_date, last_qty = target_df['Date'].max(), target_df['qty'].iloc[-1]
             future_dates = pd.date_range(start=last_date, periods=periods_to_forecast+1, freq=res_map[interval])[1:]
             
-            history = target_df['qty'].tolist()
             excel_calc_col = calculate_excel_baseline(history, technique, tech_params, periods=periods_to_forecast)
             
-            # AI Pattern Logic (Residual Formula)
+            # --- AI PATTERN LOGIC ---
             static_baseline = excel_calc_col[0] 
             target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
             target_df['diff'] = target_df['qty'] - static_baseline
-            model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
+            
+            # --- VALIDATION 3: REPRODUCIBILITY ---
+            model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05, random_state=42)
             model.fit(target_df[['month', 'dow']], target_df['diff'])
             
             f_df = pd.DataFrame({'Date': future_dates, 'month': future_dates.month, 'dow': future_dates.dayofweek})
             ai_residuals = model.predict(f_df[['month', 'dow']])
             
-            # ROUND UP FINAL AI PREDICTION
+            # --- VALIDATION 2: CAPPING RESIDALS ---
+            res_cap = np.std(history) * 2 if np.std(history) > 0 else np.mean(history)
+            ai_residuals = np.clip(ai_residuals, -res_cap, res_cap)
+            
             predicted_calc_col = [int(np.ceil(max(b + r, 0))) for b, r in zip(excel_calc_col, ai_residuals)]
+            
+            # --- POLISH 4: CONFIDENCE BANDS ---
+            upper_band = [int(v * 1.1) for v in predicted_calc_col]
+            lower_band = [int(v * 0.9) for v in predicted_calc_col]
 
             hist_labels = get_display_labels(target_df['Date'], interval, is_forecast=False)
             future_labels = get_display_labels(future_dates, interval, is_forecast=True)
 
-            # Graphing
+            # --- GRAPHING ---
             st.subheader(f"📈 {interval} Trend Analysis: {item_name}")
             fig = go.Figure()
+            
+            # Shaded Confidence Area
+            fig.add_trace(go.Scatter(
+                x=future_labels + future_labels[::-1],
+                y=upper_band + lower_band[::-1],
+                fill='toself', fillcolor='rgba(79, 70, 229, 0.1)',
+                line=dict(color='rgba(255,255,255,0)'),
+                hoverinfo="skip", name="Confidence Band (±10%)"
+            ))
+
             fig.add_trace(go.Scatter(x=hist_labels, y=target_df['qty'], name="History", line=dict(color="#1a8cff", width=2)))
             conn_x = [hist_labels[-1]] + list(future_labels)
-            fig.add_trace(go.Scatter(x=conn_x, y=[last_qty] + excel_calc_col, name="Excel Forecast", line=dict(color="#999999", dash='dot')))
-            fig.add_trace(go.Scatter(x=conn_x, y=[last_qty] + predicted_calc_col, name="AI Predicted Forecast", line=dict(color="#4F46E5", width=3)))
+            fig.add_trace(go.Scatter(x=conn_x, y=[last_qty] + excel_calc_col, name="Baseline Forecast", line=dict(color="#999999", dash='dot')))
+            fig.add_trace(go.Scatter(x=conn_x, y=[last_qty] + predicted_calc_col, name="AI Adjusted Forecast", line=dict(color="#4F46E5", width=3)))
 
             fig.update_layout(template="plotly_white", hovermode="x unified", height=450, legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig, use_container_width=True)
 
             st.markdown("#### Demand Schedule")
-            res_df = pd.DataFrame({"Period": future_labels, "AI Predicted Forecast": predicted_calc_col, "Excel Calculated Forecast": excel_calc_col})
+            res_df = pd.DataFrame({"Period": future_labels, "AI Predicted": predicted_calc_col, "Baseline": excel_calc_col, "Upper Range": upper_band, "Lower Range": lower_band})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
+            # --- POLISH 6: EXPORT MULTI-SHEET ---
             output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer: res_df.to_excel(writer, index=False)
-            st.download_button("📥 EXPORT REPORT", output.getvalue(), f"Forecast_{item_name}.xlsx")
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                res_df.to_excel(writer, index=False, sheet_name='Forecast_Data')
+                # Assumptions Sheet
+                assumptions = pd.DataFrame({
+                    "Parameter": ["Item", "Forecast Interval", "Horizon", "Technique", "Calculation Date"],
+                    "Value": [item_name, interval, f"{horizon_val} {horizon_unit}", technique, datetime.now().strftime("%Y-%m-%d %H:%M")]
+                })
+                assumptions.to_excel(writer, index=False, sheet_name='Assumptions')
+            
+            st.download_button("📥 EXPORT ENTERPRISE REPORT", output.getvalue(), f"AgiloForecast_{item_name}.xlsx")
             st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
