@@ -99,7 +99,7 @@ unit_map = {"Hourly": "Hours", "Daily": "Days", "Weekly": "Weeks", "Monthly": "M
 current_unit = unit_map.get(interval, "Periods")
 
 with c4:
-    technique = st.selectbox("Baseline Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
+    technique = st.selectbox("Forecast Algorithm", ["Historical Average", "Weightage Average", "Moving Average", "Ramp Up Evenly", "Exponentially"])
 with c5:
     tech_params = {}
     if technique == "Weightage Average":
