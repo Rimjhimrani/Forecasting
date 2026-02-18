@@ -10,7 +10,7 @@ if "wa_weights" not in st.session_state:
     st.session_state.wa_weights = None
 
 # --- 1. PREMIUM ENTERPRISE UI CONFIG ---
-st.set_page_config(page_title="AI Supply Chain | Precision", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="AgiloForecast | Enterprise AI", layout="wide", initial_sidebar_state="collapsed")
 
 # Custom CSS
 st.markdown("""
@@ -46,43 +46,41 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 2: PARAMETERS (DYNAMIC CALCULATION) ---
 st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
-            '<div class="step-label">Step 02</div><div class="step-heading">Set Parameters</div>', unsafe_allow_html=True)
+            '<div class="step-label">Step 02</div><div class="step-heading">Time Parameters</div>', unsafe_allow_html=True)
+
+st.write("---")
+st.caption("📅 **Forecast Horizon (Future)**")
 c1, c2, c3 = st.columns([2, 2, 1])
 with c1:
     interval = st.selectbox("Forecast Interval (Frequency)", options=["Hourly", "Daily", "Weekly", "Monthly", "Quarterly", "Year"], index=1)
 with c2:
-    horizon_unit = st.selectbox("Forecast Horizon (Duration Unit)", ["Day(s)", "Week(s)", "Month(s)", "Quarter(s)", "Year(s)"], index=2)
+    horizon_unit = st.selectbox("Forecast Horizon Unit", ["Day(s)", "Week(s)", "Month(s)", "Quarter(s)", "Year(s)"], index=2)
 with c3:
-    horizon_val = st.number_input("Duration", min_value=1, value=1)
+    horizon_val = st.number_input("Duration", min_value=1, value=1, key="hor_val")
 
-# Logic to calculate total periods based on Interval and Horizon
-def calculate_total_periods(inv, h_unit, h_val):
-    # Convert everything to days (single source of truth)
-    interval_to_days = {
-        "Hourly": 1/24,
-        "Daily": 1,
-        "Weekly": 7,
-        "Monthly": 30,
-        "Quarterly": 91,
-        "Year": 365
-    }
+st.write("")
+st.caption("🕒 **Historical Lookback (Past Data for Analysis)**")
+h1, h2, h3 = st.columns([2, 2, 1])
+with h1:
+    hist_scope = st.selectbox("Historical Data Range", ["All Available Data", "Custom Lookback"])
+with h2:
+    if hist_scope == "Custom Lookback":
+        hist_unit = st.selectbox("Lookback Unit", ["Day(s)", "Week(s)", "Month(s)", "Quarter(s)", "Year(s)"], index=2)
+    else:
+        st.info("System will use 100% of uploaded history.")
+with h3:
+    if hist_scope == "Custom Lookback":
+        hist_val = st.number_input("Duration", min_value=1, value=6, key="hist_val")
 
-    horizon_to_days = {
-        "Day(s)": 1,
-        "Week(s)": 7,
-        "Month(s)": 30,
-        "Quarter(s)": 91,
-        "Year(s)": 365
-    }
+# Helper to calculate total periods
+def calculate_total_periods(h_unit, h_val, interval):
+    interval_to_days = {"Hourly": 1/24, "Daily": 1, "Weekly": 7, "Monthly": 30, "Quarterly": 91, "Year": 365}
+    horizon_to_days = {"Day(s)": 1, "Week(s)": 7, "Month(s)": 30, "Quarter(s)": 91, "Year(s)": 365}
+    total_days = horizon_to_days[h_unit] * h_val
+    return int(np.ceil(total_days / interval_to_days[interval]))
 
-    total_days = horizon_to_days[horizon_unit] * horizon_val
-    interval_days = interval_to_days[interval]
-
-    periods = int(np.ceil(total_days / interval_days))
-    return periods
-
-total_forecast_periods = calculate_total_periods(interval, horizon_unit, horizon_val)
-st.caption(f"💡 System will generate **{total_forecast_periods}** {interval} data points.")
+total_forecast_periods = calculate_total_periods(horizon_unit, horizon_val, interval)
+st.caption(f"💡 Results: Use **{hist_scope}** to predict next **{total_forecast_periods} {interval} periods**.")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- STEP 3: TECHNIQUES ---
@@ -127,7 +125,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # --- LOGIC FUNCTIONS ---
 def ramp_up_controller(demand, periods, mode="auto", ramp_type="linear", increment=None, growth_factor=None):
-    baseline = demand[-1]
+    baseline = demand[-1] if len(demand) > 0 else 0
     if mode == "manual":
         if ramp_type == "linear": return [baseline + (k * (increment or 0)) for k in range(1, periods + 1)]
         if ramp_type == "compound": return [baseline * ((growth_factor or 1.0) ** k) for k in range(1, periods + 1)]
@@ -137,7 +135,7 @@ def ramp_up_controller(demand, periods, mode="auto", ramp_type="linear", increme
             inc = (demand[-1] - demand[0]) / (len(demand) - 1)
             return [baseline + (k * inc) for k in range(1, periods + 1)]
         if ramp_type == "compound":
-            gf = (demand[-1] / demand[0]) ** (1 / (len(demand) - 1)) if demand[0] != 0 else 1.0
+            gf = (demand[-1] / demand[0]) ** (1 / (len(demand) - 1)) if (demand[0] != 0 and demand[-1] != 0) else 1.0
             return [baseline * (gf ** k) for k in range(1, periods + 1)]
     return [baseline] * periods
 
@@ -174,6 +172,7 @@ if uploaded_file:
         df_long['qty'] = pd.to_numeric(df_long['qty'], errors='coerce').fillna(0)
         df_long = df_long.sort_values('Date').dropna(subset=['Date'])
 
+        # Data Slicing Logic
         if main_choice == "Aggregate Wise":
             target_df = df_long.groupby('Date')['qty'].sum().reset_index()
             item_name = "System-wide Aggregate"
@@ -188,55 +187,66 @@ if uploaded_file:
                 target_df = df_long[(df_long[model_col] == selected_model) & (df_long[part_no_col] == selected_part)].copy()
                 item_name = f"{selected_part}"
 
+        # Resample before filtering to ensure valid lookback
         res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M", "Quarterly": "Q", "Year": "A"}
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
+        # APPLY HISTORICAL LOOKBACK FILTER
+        if hist_scope == "Custom Lookback":
+            h_to_days = {"Day(s)": 1, "Week(s)": 7, "Month(s)": 30, "Quarter(s)": 91, "Year(s)": 365}
+            lookback_days = h_to_days[hist_unit] * hist_val
+            max_date = target_df['Date'].max()
+            cutoff_date = max_date - timedelta(days=lookback_days)
+            target_df = target_df[target_df['Date'] >= cutoff_date].reset_index(drop=True)
+
         if st.button("RUN PREDICTIVE ANALYSIS"):
-            st.markdown('<div class="insight-card">', unsafe_allow_html=True)
-            
-            # Use calculated periods
-            periods_to_forecast = total_forecast_periods
-            
-            last_date, last_qty = target_df['Date'].max(), target_df['qty'].iloc[-1]
-            future_dates = pd.date_range(start=last_date, periods=periods_to_forecast+1, freq=res_map[interval])[1:]
-            
-            history = target_df['qty'].tolist()
-            excel_calc_col = calculate_excel_baseline(history, technique, tech_params, periods=periods_to_forecast)
-            
-            # AI Pattern Logic
-            static_baseline = excel_calc_col[0] 
-            target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
-            target_df['diff'] = target_df['qty'] - static_baseline
-            model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
-            model.fit(target_df[['month', 'dow']], target_df['diff'])
-            
-            f_df = pd.DataFrame({'Date': future_dates, 'month': future_dates.month, 'dow': future_dates.dayofweek})
-            ai_residuals = model.predict(f_df[['month', 'dow']])
-            
-            predicted_calc_col = [round(max(b + r, 0), 2) for b, r in zip(excel_calc_col, ai_residuals)]
-            excel_calc_col = [round(b, 2) for b in excel_calc_col]
+            if len(target_df) < 2:
+                st.error("Insufficient data points in the selected historical lookback to perform analysis.")
+            else:
+                st.markdown('<div class="insight-card">', unsafe_allow_html=True)
+                
+                periods_to_forecast = total_forecast_periods
+                last_date, last_qty = target_df['Date'].max(), target_df['qty'].iloc[-1]
+                future_dates = pd.date_range(start=last_date, periods=periods_to_forecast+1, freq=res_map[interval])[1:]
+                
+                history = target_df['qty'].tolist()
+                excel_calc_col = calculate_excel_baseline(history, technique, tech_params, periods=periods_to_forecast)
+                
+                # AI Pattern Logic
+                static_baseline = excel_calc_col[0] 
+                target_df['month'] = target_df['Date'].dt.month
+                target_df['dow'] = target_df['Date'].dt.dayofweek
+                target_df['diff'] = target_df['qty'] - static_baseline
+                
+                model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05)
+                model.fit(target_df[['month', 'dow']], target_df['diff'])
+                
+                f_df = pd.DataFrame({'Date': future_dates, 'month': future_dates.month, 'dow': future_dates.dayofweek})
+                ai_residuals = model.predict(f_df[['month', 'dow']])
+                
+                predicted_calc_col = [round(max(b + r, 0), 2) for b, r in zip(excel_calc_col, ai_residuals)]
+                excel_calc_col = [round(b, 2) for b in excel_calc_col]
 
-            # Graphing
-            st.subheader(f"📈 {interval} Trend Analysis: {item_name}")
-            fig = go.Figure()
-            # Historical line
-            fig.add_trace(go.Scatter(x=target_df['Date'].tail(20), y=target_df['qty'].tail(20), name="History", line=dict(color="#1a8cff", width=2)))
-            # Forecast lines
-            f_dates_conn = [last_date] + list(future_dates)
-            fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty] + excel_calc_col, name="Baseline Forecast", line=dict(color="#999999", dash='dot')))
-            fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty] + predicted_calc_col, name="AI Adjusted Forecast", line=dict(color="#4F46E5", width=3)))
+                # Graphing
+                st.subheader(f"📈 {interval} Trend Analysis: {item_name}")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=target_df['Date'], y=target_df['qty'], name="History Used", line=dict(color="#1a8cff", width=2)))
+                
+                f_dates_conn = [last_date] + list(future_dates)
+                fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty] + excel_calc_col, name="Baseline Forecast", line=dict(color="#999999", dash='dot')))
+                fig.add_trace(go.Scatter(x=f_dates_conn, y=[last_qty] + predicted_calc_col, name="AI Adjusted Forecast", line=dict(color="#4F46E5", width=3)))
 
-            fig.update_layout(template="plotly_white", hovermode="x unified", height=450, legend=dict(orientation="h", y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(template="plotly_white", hovermode="x unified", height=450, legend=dict(orientation="h", y=1.1))
+                st.plotly_chart(fig, use_container_width=True)
 
-            st.markdown("#### Demand Schedule")
-            res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Predicted": predicted_calc_col, "Baseline": excel_calc_col})
-            st.dataframe(res_df, use_container_width=True, hide_index=True)
-            
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer: res_df.to_excel(writer, index=False)
-            st.download_button("📥 EXPORT REPORT", output.getvalue(), f"Forecast_{item_name}.xlsx")
-            st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("#### Demand Schedule")
+                res_df = pd.DataFrame({"Date": future_dates.strftime('%d-%m-%Y'), "AI Predicted": predicted_calc_col, "Baseline": excel_calc_col})
+                st.dataframe(res_df, use_container_width=True, hide_index=True)
+                
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer: res_df.to_excel(writer, index=False)
+                st.download_button("📥 EXPORT REPORT", output.getvalue(), f"Forecast_{item_name}.xlsx")
+                st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error Processing Data: {e}")
