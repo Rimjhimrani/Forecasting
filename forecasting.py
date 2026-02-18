@@ -35,14 +35,22 @@ st.markdown('<div style="text-align: center; margin-bottom: 80px;">'
 # --- HELPER: LABEL LOGIC ---
 def get_display_labels(dates, interval, is_forecast=False):
     dates_ser = pd.Series(dates)
-    if is_forecast:
-        if interval == "Weekly": return [f"Week {i+1}" for i in range(len(dates_ser))]
-        if interval == "Daily": return [f"Day {i+1}" for i in range(len(dates_ser))]
-        if interval == "Hourly": return [f"Hr {i+1}" for i in range(len(dates_ser))]
     
+    # Logic for Forecast Labels
+    if is_forecast:
+        if interval == "Daily": 
+            return dates_ser.dt.strftime('%d-%m-%Y').tolist() # Show DATE only for daily
+        if interval == "Weekly": 
+            return [f"Week {i+1}" for i in range(len(dates_ser))]
+        if interval == "Hourly": 
+            return [f"Hr {i+1}" for i in range(len(dates_ser))]
+    
+    # Logic for History or Larger Units (Month/Quarter/Year)
     if interval == "Monthly": return dates_ser.dt.strftime('%b %y').tolist()
     if interval == "Quarterly": return [f"Q{d.quarter}-{str(d.year)[2:]}" for d in dates_ser]
     if interval == "Year": return [f"Year {str(d.year)[2:]}" for d in dates_ser]
+    
+    # Default for historical daily/hourly
     return dates_ser.dt.strftime('%d-%m-%Y').tolist()
 
 # --- STEP 1: SCOPE ---
@@ -210,7 +218,7 @@ if uploaded_file:
             history = target_df['qty'].tolist()
             excel_calc_col = calculate_excel_baseline(history, technique, tech_params, periods=periods_to_forecast)
             
-            # AI Pattern Logic (Your Residual Formula)
+            # AI Pattern Logic (Residual Formula)
             static_baseline = excel_calc_col[0] 
             target_df['month'], target_df['dow'] = target_df['Date'].dt.month, target_df['Date'].dt.dayofweek
             target_df['diff'] = target_df['qty'] - static_baseline
