@@ -35,22 +35,17 @@ st.markdown('<div style="text-align: center; margin-bottom: 80px;">'
 # --- HELPER: LABEL LOGIC ---
 def get_display_labels(dates, interval, is_forecast=False):
     dates_ser = pd.Series(dates)
-    
-    # Logic for Forecast Labels
     if is_forecast:
         if interval == "Daily": 
-            return dates_ser.dt.strftime('%d-%m-%Y').tolist() # Show DATE only for daily
+            return dates_ser.dt.strftime('%d-%m-%Y').tolist()
         if interval == "Weekly": 
             return [f"Week {i+1}" for i in range(len(dates_ser))]
         if interval == "Hourly": 
             return [f"Hr {i+1}" for i in range(len(dates_ser))]
     
-    # Logic for History or Larger Units (Month/Quarter/Year)
     if interval == "Monthly": return dates_ser.dt.strftime('%b %y').tolist()
     if interval == "Quarterly": return [f"Q{d.quarter}-{str(d.year)[2:]}" for d in dates_ser]
     if interval == "Year": return [f"Year {str(d.year)[2:]}" for d in dates_ser]
-    
-    # Default for historical daily/hourly
     return dates_ser.dt.strftime('%d-%m-%Y').tolist()
 
 # --- STEP 1: SCOPE ---
@@ -136,7 +131,7 @@ st.markdown('<div class="step-wrapper"><div class="step-dot"></div>'
 uploaded_file = st.file_uploader("Drop Enterprise Data (CSV or Excel)", type=['xlsx', 'csv'])
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- LOGIC FUNCTIONS (YOUR ORIGINAL FORMULAS) ---
+# --- LOGIC FUNCTIONS (ROUNDED UP) ---
 def ramp_up_controller(demand, periods, mode="auto", ramp_type="linear", increment=None, growth_factor=None):
     baseline = demand[-1]
     if mode == "manual":
@@ -154,24 +149,28 @@ def ramp_up_controller(demand, periods, mode="auto", ramp_type="linear", increme
 
 def calculate_excel_baseline(demand, tech, params, periods=1):
     if len(demand) == 0: return [0] * periods
-    if tech == "Historical Average": return [np.mean(demand)] * periods
+    if tech == "Historical Average": res = [np.mean(demand)] * periods
     elif tech == "Moving Average":
         n = params.get('n', 7)
         val = np.mean(demand[-n:]) if len(demand) >= n else np.mean(demand)
-        return [val] * periods
+        res = [val] * periods
     elif tech == "Weightage Average":
         w = params.get('weights', np.array([0.5, 0.5]))
         n = len(w)
         val = np.dot(demand[-n:], w) / np.sum(w) if len(demand) >= n else np.mean(demand)
-        return [val] * periods
+        res = [val] * periods
     elif tech == "Ramp Up Evenly":
-        return ramp_up_controller(demand, periods, **{k: v for k, v in params.items() if k in ['mode', 'ramp_type', 'increment', 'growth_factor']})
+        res = ramp_up_controller(demand, periods, **{k: v for k, v in params.items() if k in ['mode', 'ramp_type', 'increment', 'growth_factor']})
     elif tech == "Exponentially":
         alpha = params.get('alpha', 0.3)
         forecast = demand[0]
         for d in demand[1:]: forecast = alpha * d + (1 - alpha) * forecast
-        return [forecast] * periods
-    return [np.mean(demand)] * periods
+        res = [forecast] * periods
+    else:
+        res = [np.mean(demand)] * periods
+    
+    # ROUND UP BASELINE
+    return [int(np.ceil(x)) for x in res]
 
 # --- EXECUTION ---
 if uploaded_file:
@@ -202,7 +201,6 @@ if uploaded_file:
         res_map = {"Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "MS", "Quarterly": "QS", "Year": "YS"}
         target_df = target_df.set_index('Date').resample(res_map[interval]).sum().reset_index()
 
-        # APPLY LOOKBACK FILTER
         if hist_scope == "Custom Lookback":
             h_lookup = {"Day(s)": 1, "Week(s)": 7, "Month(s)": 30, "Quarter(s)": 91, "Year(s)": 365}
             cutoff = target_df['Date'].max() - timedelta(days=h_lookup[hist_unit]*hist_val)
@@ -228,10 +226,9 @@ if uploaded_file:
             f_df = pd.DataFrame({'Date': future_dates, 'month': future_dates.month, 'dow': future_dates.dayofweek})
             ai_residuals = model.predict(f_df[['month', 'dow']])
             
-            predicted_calc_col = [round(max(b + r, 0), 2) for b, r in zip(excel_calc_col, ai_residuals)]
-            excel_calc_col = [round(b, 2) for b in excel_calc_col]
+            # ROUND UP FINAL AI PREDICTION
+            predicted_calc_col = [int(np.ceil(max(b + r, 0))) for b, r in zip(excel_calc_col, ai_residuals)]
 
-            # GET LABELS
             hist_labels = get_display_labels(target_df['Date'], interval, is_forecast=False)
             future_labels = get_display_labels(future_dates, interval, is_forecast=True)
 
@@ -247,7 +244,7 @@ if uploaded_file:
             st.plotly_chart(fig, use_container_width=True)
 
             st.markdown("#### Demand Schedule")
-            res_df = pd.DataFrame({"Date": future_labels, "AI Predicted": predicted_calc_col, "Baseline": excel_calc_col})
+            res_df = pd.DataFrame({"Period": future_labels, "AI Predicted": predicted_calc_col, "Baseline": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
             output = io.BytesIO()
