@@ -237,14 +237,14 @@ if uploaded_file:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=hist_labels, y=target_df['qty'], name="History", line=dict(color="#1a8cff", width=2)))
             conn_x = [hist_labels[-1]] + list(future_labels)
-            fig.add_trace(go.Scatter(x=conn_x, y=[last_qty] + excel_calc_col, name="Baseline Forecast", line=dict(color="#999999", dash='dot')))
-            fig.add_trace(go.Scatter(x=conn_x, y=[last_qty] + predicted_calc_col, name="AI Adjusted Forecast", line=dict(color="#4F46E5", width=3)))
+            fig.add_trace(go.Scatter(x=conn_x, y=[last_qty] + excel_calc_col, name="Excel Forecast", line=dict(color="#999999", dash='dot')))
+            fig.add_trace(go.Scatter(x=conn_x, y=[last_qty] + predicted_calc_col, name="AI Predicted Forecast", line=dict(color="#4F46E5", width=3)))
 
             fig.update_layout(template="plotly_white", hovermode="x unified", height=450, legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig, use_container_width=True)
 
             st.markdown("#### Demand Schedule")
-            res_df = pd.DataFrame({"Period": future_labels, "AI Predicted": predicted_calc_col, "Baseline": excel_calc_col})
+            res_df = pd.DataFrame({"Period": future_labels, "AI Predicted Forecast": predicted_calc_col, "Excel Calculated Forecast": excel_calc_col})
             st.dataframe(res_df, use_container_width=True, hide_index=True)
             
             output = io.BytesIO()
